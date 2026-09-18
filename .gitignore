@@ -1,0 +1,19 @@
+# 第三方代码：本地拉取，不纳入版本控制
+# 拉取方式与原因见 README.md「第三方依赖」一节
+third_party/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 构建产物
+build/
+dist/
+*.so
+
+# 编辑器 / 系统
+.idea/
+.DS_Store
