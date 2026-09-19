@@ -9,6 +9,19 @@
   Roofline 瓶颈判断、CUDA 基本功、GEMM、Attention、量化、算子融合、边缘设备实践、性能测量，
   共 8 篇。从 [README](docs/kernel-opt/README.md) 开始。
 
+- [docs/leetgpu/](docs/leetgpu/) —— LeetGPU 题库精读
+
+  [01-vector-add.md](docs/leetgpu/01-vector-add.md)：题目解读、评测框架（`challenge.py` /
+  ctypes 签名 / 三类测试）、模板逐行注释、正确实现、本地编译运行，以及一次完整的带宽算账
+  （含 RTX 5060 Ti 实测数据）。
+
+## 示例
+
+- [examples/](examples/) —— 可直接编译运行的代码
+
+  [examples/leetgpu/01_vector_add/](examples/leetgpu/01_vector_add/)：自带正确性校验与
+  带宽实测的 vector add，`nvcc -O3 -arch=sm_120 vector_add.cu -o vector_add.exe`。
+
 ## 第三方依赖
 
 以下内容**本地拉取，不纳入版本控制**。
