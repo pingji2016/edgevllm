@@ -8,7 +8,7 @@
 | 文件 | 内容 |
 | --- | --- |
 | [01-roofline.md](01-roofline.md) | Roofline 模型、算术强度、prefill 与 decode 的瓶颈差异 |
-| [02-cuda-basics.md](02-cuda-basics.md) | 合并访存、共享内存、寄存器压力、occupancy、warp shuffle |
+| [02-cuda-basics.md](02-cuda-basics.md) | **执行模型（grid/block/warp/thread）**、合并访存、共享内存、寄存器压力、occupancy、warp shuffle |
 | [03-gemm.md](03-gemm.md) | GEMM tiling、双缓冲、split-K、Tensor Core、GEMV 与 batched GEMM |
 | [04-attention.md](04-attention.md) | FlashAttention、online softmax、PagedAttention、GQA/MQA |
 | [05-quantization.md](05-quantization.md) | INT8/INT4/FP8、W4A16 反量化 GEMM、group-wise scale |
@@ -19,7 +19,7 @@
 ## 建议阅读顺序
 
 1. **先看 01**，把「这个 kernel 到底受限于什么」想清楚。大多数优化失败的原因不是代码写得不漂亮，而是优化错了瓶颈。
-2. 02 / 03 是通用基本功，任何 GPU 算子都用得上。
+2. 02 / 03 是通用基本功，任何 GPU 算子都用得上。02 从执行模型讲起，没接触过 CUDA 的话从那节开始。
 3. 04 / 05 / 06 是 LLM 特有的部分，也是 vLLM 里改动最频繁的地方。
 4. 07 / 08 讲怎么在边缘设备上落地、怎么验证优化真的有效。
 
