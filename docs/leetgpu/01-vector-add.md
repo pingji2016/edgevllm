@@ -323,12 +323,26 @@ Triton 的向量化是编译器自己推断的：它靠 `offs` 的连续性判�
 [examples/leetgpu/01_vector_add/vector_add.cu](../../examples/leetgpu/01_vector_add/vector_add.cu)，
 自带正确性校验（覆盖 N=1/2/3/7/30/255/256/257 等边界）和三配置性能对比。
 
+**最省事的方式是走 [examples/build.sh](../../examples/build.sh)**，它会自动找 nvcc、
+探测本机架构、编译所有示例并运行：
+
+```bash
+cd examples
+./build.sh run            # 编译 + 运行 examples 下所有 .cu
+./build.sh run leetgpu/01_vector_add   # 只处理这一个
+```
+
+手动编译也一样（脚本内部做的就是这件事）：
+
 ```bash
 cd examples/leetgpu/01_vector_add
 nvcc -O3 -arch=sm_120 vector_add.cu -o vector_add.exe
 ./vector_add.exe          # 默认 N = 25,000,000
 ./vector_add.exe 1000000  # 自定义 N
 ```
+
+完整的跨平台说明（含 WSL2 上装 CUDA 的注意事项）见
+[examples/README.md](../../examples/README.md)。
 
 `-arch` 按自己的卡填：RTX 50 系（Blackwell）是 `sm_120`，40 系是 `sm_89`，30 系是 `sm_86`。
 用 `nvidia-smi` 看型号，或用 `nvcc --list-gpu-arch` 列出全部。
@@ -439,19 +453,28 @@ documentation / nvml-dev，**不含 `cuda-drivers`**（实测 86 个包，约 3.
 
 | 配置 | Windows | WSL2 |
 | --- | --- | --- |
-| 朴素标量版 | 760.8 µs (88.0%) | 777 µs (86.2%) |
-| `float4` 铺满 grid | 760.9 µs (88.0%) | 801 µs (83.7%)¹ |
-| `float4` 超订 grid | 933.1 µs (71.8%) | 975 µs (68.7%) |
+| 朴素标量版 | 758 ~ 761 µs (88.0%) | 760 ~ 791 µs (84.6 ~ 88.0%) |
+| `float4` 铺满 grid | 760 ~ 766 µs (87.5 ~ 88.0%) | 771 ~ 836 µs (83.7 ~ 86.8%) |
+| `float4` 超订 grid | 930 ~ 933 µs (71.8 ~ 72.0%) | 952 ~ 999 µs (67.0 ~ 70.3%) |
 
-¹ WSL 的三次测量是 836 / 783 / 784 µs，第一次是离群值。取中位数约 784 µs。
+上表是多次运行的范围，不是单次值。**列区间而不是单点，是因为单次测量会骗人**——
+见下面的教训。
 
 **两点值得注意：**
 
-1. **WSL 整体略慢**（约 2%），这在 WSL2 上是正常的——虚拟化层会带来一些开销。
-2. **「向量化不带来收益」这个结论在两边都成立。** WSL 的 naive 和 float4 差异
-   落在测量噪声里（784 vs 777，不到 1%），而 grid 超订在两边都稳定慢 25% 左右。
-   **这个结论是稳的，不是某一台机器的偶然。**
-   完整原始数据见 [examples/leetgpu/01_vector_add/](../../examples/leetgpu/01_vector_add/)。
+1. **WSL 和 Windows 的性能差异落在噪声里。** 两者的区间是重叠的（naive: 760~791 vs
+   758~761），WSL 的下界和 Windows 基本重合。WSL2 的虚拟化确实有开销，但在这道题的
+   量级上**测不出稳定的差异**。
+2. **「向量化不带来收益」这个结论在两边都成立。** naive 和 float4 的差异始终在噪声内，
+   而 grid 超订在两边都稳定慢 25% 左右。**这个结论是稳的。**
+
+> **一个教训：别用单次测量下结论。**
+> 起初我们跑了三次 WSL，得到 836 / 783 / 784 µs，看着像「WSL 上 float4 快 3%」，
+> 和 Windows 的结论矛盾。后来又跑出 760.5 µs——**同一个配置前后差 10%**。
+> 如果只测一次，很可能就把噪声写成了结论。
+> 正确做法是重复测量看分布，或者像上表一样给区间。
+
+完整原始数据见 [examples/leetgpu/01_vector_add/](../../examples/leetgpu/01_vector_add/)。
 
 ---
 
