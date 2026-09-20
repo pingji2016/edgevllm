@@ -19,8 +19,20 @@
 
 - [examples/](examples/) —— 可直接编译运行的代码
 
+  [examples/build.sh](examples/build.sh)（Windows 下用 [examples/build.cmd](examples/build.cmd)）
+  一条命令编译并运行全部示例：
+
+  ```bash
+  cd examples && ./build.sh run
+  ```
+
+  ```bat
+  cd examples && build.cmd run
+  ```
+
   [examples/leetgpu/01_vector_add/](examples/leetgpu/01_vector_add/)：自带正确性校验与
-  带宽实测的 vector add，`nvcc -O3 -arch=sm_120 vector_add.cu -o vector_add.exe`。
+  带宽实测的 vector add，以及打印设备属性的 `device_query`。编译/运行细节和
+  Windows 编码坑见 [examples/README.md](examples/README.md)。
 
 ## 第三方依赖
 
