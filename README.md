@@ -6,8 +6,9 @@
 
 - [docs/kernel-opt/](docs/kernel-opt/) —— vLLM 算子与矩阵运算优化笔记
 
-  Roofline 瓶颈判断、CUDA 基本功、GEMM、Attention、量化、算子融合、边缘设备实践、性能测量，
-  共 8 篇。从 [README](docs/kernel-opt/README.md) 开始。
+  Roofline 瓶颈判断、CUDA 基本功、GEMM、Attention、量化、算子融合、边缘设备实践、性能测量、
+  Triton 与 CUDA 的选型，
+  共 9 篇。从 [README](docs/kernel-opt/README.md) 开始。
 
 - [docs/leetgpu/](docs/leetgpu/) —— LeetGPU 题库精读
 

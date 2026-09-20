@@ -15,6 +15,7 @@
 | [06-fusion-layout.md](06-fusion-layout.md) | 算子融合、RMSNorm+Quant、RoPE、内存布局与 KV cache 写入 |
 | [07-edge.md](07-edge.md) | 边缘设备实践：带宽受限、KV cache 压缩、静态图、功耗墙 |
 | [08-profiling.md](08-profiling.md) | 性能分析方法：Nsight、roofline 画图、常见反模式 |
+| [09-triton-vs-cuda.md](09-triton-vs-cuda.md) | **Triton 与 CUDA 的抽象层级差异**、各自能做与做不到什么、vLLM 里的实际分工 |
 
 ## 建议阅读顺序
 
@@ -22,6 +23,7 @@
 2. 02 / 03 是通用基本功，任何 GPU 算子都用得上。02 从执行模型讲起，没接触过 CUDA 的话从那节开始。
 3. 04 / 05 / 06 是 LLM 特有的部分，也是 vLLM 里改动最频繁的地方。
 4. 07 / 08 讲怎么在边缘设备上落地、怎么验证优化真的有效。
+5. **09 什么时候看都行**，它不依赖前面任何优化技巧，只需要 02 的执行模型。动手写新 kernel 之前值得翻一遍——它决定的是你该写 CUDA 还是写 Triton。
 
 ## 三条贯穿全文的经验
 
@@ -31,6 +33,6 @@
 
 ## 约定
 
-- 代码片段以 CUDA C++ 和 Triton 为主，伪代码会明确标注。
+- 代码片段以 CUDA C++ 和 Triton 为主（两者的分工与选型见 [09-triton-vs-cuda.md](09-triton-vs-cuda.md)），伪代码会明确标注。
 - 提到具体数字时默认是 A100-SXM-80G（2 TB/s HBM，FP16 Tensor Core 312 TFLOP/s）这一档；边缘设备的数字单独在 [07-edge.md](07-edge.md) 里给。
 - 引用 vLLM 源码时按 `vllm/` 下的路径写，版本以 v0.6.x 为参考。
