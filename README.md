@@ -16,6 +16,12 @@
   ctypes 签名 / 三类测试）、模板逐行注释、正确实现、本地编译运行，以及一次完整的带宽算账
   （含 RTX 5060 Ti 实测数据）。
 
+- [docs/vllm/](docs/vllm/) —— vLLM 学习笔记
+
+  从「数学公式 → 代码路径 → 硬件约束」拆解 vLLM 的算子实现：线性层的 TP 分片与
+  为什么未量化 GEMM 不是自研战场，以及 RMSNorm 从数学一路到 CUDA kernel 逐行、
+  再到 IR provider 派发机制。从 [README](docs/vllm/README.md) 开始。
+
 ## 示例
 
 - [examples/](examples/) —— 可直接编译运行的代码
