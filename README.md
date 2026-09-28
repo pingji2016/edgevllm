@@ -36,6 +36,15 @@
 
   想优化已经上手的设备，看 [kernel-opt/07-edge.md](docs/kernel-opt/07-edge.md)。
 
+- [docs/whisperlive/](docs/whisperlive/) —— WhisperLive 源码精读（流式语音转写）
+
+  把一个**批处理**语音模型改造成**近实时**字幕服务的完整拆解。模型一行不改，只在服务端
+  加一层「流式化包装」：滚动窗口、双游标、重复输出检测 —— 为什么「最后一段永远不算数」，
+  以及静音时 Whisper 的幻觉怎么把时间轴拖垮。从 [README](docs/whisperlive/README.md) 开始，
+  正文是 [QUICKSTART.zh-CN.md](docs/whisperlive/QUICKSTART.zh-CN.md)（跑通、参数表、FAQ）
+  和 [DESIGN.zh-CN.md](docs/whisperlive/DESIGN.zh-CN.md)（13 条特殊处理逐条拆解、
+  两个后端差异、代码走读顺序）。
+
 ## 示例
 
 - [examples/](examples/) —— 可直接编译运行的代码
