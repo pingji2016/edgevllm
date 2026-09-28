@@ -26,6 +26,16 @@
   目录地图、请求生命周期）和 [vLLM-运行文档.md](docs/vllm/vLLM-运行文档.md)
   （在 Windows + WSL2 + RTX 5060 Ti 上的实际安装、启动与踩坑记录）。
 
+- [docs/edge/](docs/edge/) —— 边缘设备接入笔记
+
+  [01-k3-riscv-board.md](docs/edge/01-k3-riscv-board.md)：从一根网线到一块
+  **SpacemiT K3 RISC-V 板**的完整接入过程 —— ICS 绑定、ARP/TTL 识别设备、
+  端口探测为什么会自相矛盾、`Permission denied` 的两种成因怎么分开、没有
+  `sshpass` 时怎么用 `SSH_ASKPASS` 自动登录。以及一个反直觉的结论：
+  插网线换来的不是连通性，是延迟。
+
+  想优化已经上手的设备，看 [kernel-opt/07-edge.md](docs/kernel-opt/07-edge.md)。
+
 ## 示例
 
 - [examples/](examples/) —— 可直接编译运行的代码
