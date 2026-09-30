@@ -1,0 +1,19 @@
+{
+  "title": "K3 加速器分工与模型动物园",
+  "width": 1020,
+  "height": 470,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 510, "y": 35, "text": "K3 加速器分工 & 官方模型动物园", "fontSize": 25, "subtitle": "LLM 走 CPU+IME；视觉/语音走 NPU；媒体走 VPU" },
+    { "type": "rectangle", "x": 30, "y": 90, "width": 310, "height": 320, "fill": "#e7f5ff", "sectionLabel": "CPU + IME · 跑 LLM" },
+    { "type": "rectangle", "id": "llm", "x": 60, "y": 150, "width": 250, "height": 100, "label": "大语言模型 LLM", "annotation": "Qwen3.5-2B / 0.8B / 0.6B · 13-52 t/s", "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "id": "moe", "x": 60, "y": 280, "width": 250, "height": 100, "label": "MoE 30B-A3B", "annotation": "30B 参数只激活 3B · ~12 t/s", "fill": "#d0bfff", "rounded": true },
+    { "type": "rectangle", "x": 360, "y": 90, "width": 310, "height": 320, "fill": "#fff9db", "sectionLabel": "NPU · 视觉 / 语音" },
+    { "type": "rectangle", "id": "vis", "x": 390, "y": 140, "width": 250, "height": 70, "label": "视觉 Vision", "annotation": "YOLOv8 检测/姿态/分割", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "spk", "x": 390, "y": 230, "width": 250, "height": 70, "label": "语音 Speech", "annotation": "SenseVoice ASR / TTS / VAD", "fill": "#fcc2d7", "rounded": true },
+    { "type": "rectangle", "id": "vlm", "x": 390, "y": 320, "width": 250, "height": 70, "label": "VLM", "annotation": "视觉语言模型", "fill": "#99e9f2", "rounded": true },
+    { "type": "rectangle", "x": 690, "y": 90, "width": 310, "height": 320, "fill": "#ebfbee", "sectionLabel": "VPU · 媒体" },
+    { "type": "rectangle", "id": "codec", "x": 720, "y": 150, "width": 250, "height": 100, "label": "视频编解码", "annotation": "H.264/H.265 硬编解 4K", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "ff", "x": 720, "y": 280, "width": 250, "height": 100, "label": "ffmpeg 接入", "annotation": "h264_stcodec / v4l2m2m", "fill": "#dee2e6", "rounded": true }
+  ]
+}

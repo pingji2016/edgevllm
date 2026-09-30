@@ -1,0 +1,20 @@
+{
+  "title": "各模型生成速度对比",
+  "width": 1000,
+  "height": 580,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 500, "y": 40, "text": "各模型生成速度对比 (tok/s)", "fontSize": 25, "subtitle": "同一条 DDR 上，模型越大越慢；MoE 只激活 3B 所以能又快又大" },
+    { "type": "text", "x": 60, "y": 126, "text": "Qwen3-0.6B  ·  52 t/s", "fontSize": 16, "align": "start" },
+    { "type": "text", "x": 60, "y": 206, "text": "Qwen3.5-0.8B  ·  29 t/s", "fontSize": 16, "align": "start" },
+    { "type": "text", "x": 60, "y": 286, "text": "Qwen3.5-2B  ·  13 t/s  (日常推荐)", "fontSize": 16, "align": "start" },
+    { "type": "text", "x": 60, "y": 366, "text": "Qwen3-30B-A3B MoE  ·  12 t/s", "fontSize": 16, "align": "start" },
+    { "type": "text", "x": 60, "y": 446, "text": "Qwen3-8B  ·  3 t/s  (官方清单里没有)", "fontSize": 16, "align": "start" },
+    { "type": "rectangle", "x": 360, "y": 110, "width": 560, "height": 50, "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "x": 360, "y": 190, "width": 308, "height": 50, "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "x": 360, "y": 270, "width": 142, "height": 50, "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "x": 360, "y": 350, "width": 124, "height": 50, "fill": "#d0bfff", "rounded": true },
+    { "type": "rectangle", "x": 360, "y": 430, "width": 40, "height": 50, "fill": "#fcc2d7", "rounded": true },
+    { "type": "text", "x": 500, "y": 530, "text": "官方 model_zoo 跑分 · spacemit llama.cpp（CPU+IME, -t8）", "fontSize": 14, "subtitle": "8B 稠密是社区常用、官方未收录；2B 实测 13.3 t/s" }
+  ]
+}

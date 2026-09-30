@@ -1,0 +1,19 @@
+{
+  "title": "为什么 8B 生成这么慢",
+  "width": 920,
+  "height": 560,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 460, "y": 35, "text": "为什么 8B 生成这么慢：内存墙", "fontSize": 25, "subtitle": "生成不是算力瓶颈，是内存带宽瓶颈" },
+    { "type": "rectangle", "id": "cpu", "x": 40, "y": 120, "width": 180, "height": 100, "label": "CPU 16 核", "annotation": "X100 + A100", "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "id": "ime", "x": 250, "y": 120, "width": 170, "height": 100, "label": "IME 矩阵", "annotation": "只加速算力", "fill": "#d0bfff", "rounded": true },
+    { "type": "rectangle", "id": "npu", "x": 450, "y": 120, "width": 170, "height": 100, "label": "NPU", "annotation": "也读同一条 DDR", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "gpu", "x": 650, "y": 120, "width": 180, "height": 100, "label": "GPU", "annotation": "统一内存", "fill": "#fcc2d7", "rounded": true },
+    { "type": "rectangle", "id": "ddr", "x": 330, "y": 360, "width": 260, "height": 110, "label": "共享 LPDDR5 16G", "annotation": "标称峰值 52GB/s · CPU 实测 ~20GB/s", "fill": "#b2f2bb", "rounded": true },
+    { "type": "arrow", "from": "cpu", "to": "ddr" },
+    { "type": "arrow", "from": "ime", "to": "ddr" },
+    { "type": "arrow", "from": "npu", "to": "ddr" },
+    { "type": "arrow", "from": "gpu", "to": "ddr" },
+    { "type": "text", "x": 460, "y": 510, "text": "tok/s ≈ 带宽 ÷ 每 token 权重字节数 → 8B-Q4(5.2GB) 上限 ≈ 4 t/s", "fontSize": 16 }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "title": "软编解码 vs 硬编解码",
+  "width": 1000,
+  "height": 580,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 500, "y": 32, "text": "软编解码 vs 硬编解码", "fontSize": 26, "subtitle": "软解=CPU 跑算法；硬解=专用 VPU 硬流水线（K3 实测见底部）" },
+    { "type": "rectangle", "x": 30, "y": 92, "width": 450, "height": 310, "fill": "#e7f5ff", "sectionLabel": "软件编解码 · CPU（libx264 / libx265）" },
+    { "type": "rectangle", "id": "sw1", "x": 60, "y": 150, "width": 390, "height": 95, "label": "优点：压缩率高、参数灵活", "annotation": "CRF / preset / GOP 全可调，画质可控", "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "id": "sw2", "x": 60, "y": 270, "width": 390, "height": 95, "label": "代价：吃 CPU", "annotation": "1080p 编码把 6-8 个核跑满", "fill": "#ffd8a8", "rounded": true },
+    { "type": "rectangle", "x": 520, "y": 92, "width": 450, "height": 310, "fill": "#ebfbee", "sectionLabel": "硬件编解码 · VPU（Linlon / MPP）" },
+    { "type": "rectangle", "id": "hw1", "x": 550, "y": 150, "width": 390, "height": 95, "label": "优点：CPU 几乎为 0、实时、省电", "annotation": "专用硬流水线，适合 NVR/直播", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "hw2", "x": 550, "y": 270, "width": 390, "height": 95, "label": "代价：压缩率略低、受限", "annotation": "参数少、格式/分辨率受限", "fill": "#fcc2d7", "rounded": true },
+    { "type": "text", "x": 500, "y": 430, "text": "K3 实测（1080p30，150 帧）", "fontSize": 18, "subtitle": "软编 H264 27.7fps · 软编 H265 13.7fps · 软解 H264 260fps · 软解 H265 203fps" },
+    { "type": "text", "x": 500, "y": 500, "text": "硬件：stcodec 缺 MPP 模块(段错误) · v4l2m2m 编码 -22 · v4l2m2m 解码内核挂死 → 本镜像上 VPU 不可用", "fontSize": 14 }
+  ]
+}

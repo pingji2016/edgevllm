@@ -1,0 +1,17 @@
+[Unit]
+Description=Streaming ASR (sherpa-onnx, streaming zipformer bilingual zh-en)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pingji/mage-vl/sherpa
+ExecStart=/home/pingji/mage-vl/sherpa/start-asr-server.sh
+Environment=PORT=6006
+Environment=THREADS=4
+Environment=BATCH=4
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpacemiT K3 (RISC-V) 大模型推理实测报告</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#f6f5f2; color:#1e1e1e;
+    font:16px/1.75 -apple-system,BlinkMacSystemFont,"Noto Sans CJK SC","PingFang SC",sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 28px; margin: 0 0 6px; }
+  .sub { color:#868e96; margin: 0 0 28px; }
+  h2 { font-size: 21px; margin: 42px 0 12px; padding-left: 10px; border-left: 4px solid #3b82f6; }
+  h3 { font-size: 17px; margin: 24px 0 8px; color:#2b2b2b; }
+  p { margin: 8px 0; }
+  figure { margin: 18px 0; }
+  figure img { width:100%; border:1px solid #e3ded7; border-radius:10px; background:#faf8f5; }
+  figcaption { color:#868e96; font-size:13px; text-align:center; margin-top:6px; }
+  table { border-collapse: collapse; width:100%; margin:12px 0; font-size:14px; }
+  th,td { border:1px solid #e3ded7; padding:7px 10px; text-align:left; }
+  th { background:#efece7; }
+  code,pre { font-family: ui-monospace,SFMono-Regular,Menlo,monospace; }
+  pre { background:#171a21; color:#e6e6e6; border-radius:8px; padding:14px 16px; overflow-x:auto; font-size:13px; }
+  code { background:#efece7; padding:1px 5px; border-radius:4px; font-size:13px; }
+  pre code { background:none; padding:0; }
+  .callout { background:#fff9db; border:1px solid #f0e0a0; border-radius:10px; padding:14px 18px; margin:16px 0; }
+  .callout.red { background:#fff0f0; border-color:#f0c0c0; }
+  .callout.green { background:#ebfbee; border-color:#b8e6c0; }
+  .k { color:#868e96; }
+  ul { margin: 8px 0 8px 4px; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .big { font-size: 19px; font-weight: 700; }
+  footer { color:#adb5bd; font-size:13px; margin-top:48px; border-top:1px solid #e3ded7; padding-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>SpacemiT K3 (RISC-V) 大模型推理实测报告</h1>
+  <p class="sub">板子：pingji-k3 · Bianbu 4.0.1 · 16GB · 2026-09-29 · 由远程实测整理</p>
+
+  <div class="callout">
+    <b>一句话结论</b><br>
+    K3 <b>确实能跑 8B</b>，但生成只有 <b>~2.9 tok/s</b>——因为它是<b>内存带宽瓶颈</b>（CPU 实测 ~20GB/s，不是标称峰值 52GB/s）。
+    官方调优的小模型才是主力：<b>Qwen3.5-2B 约 13 tok/s</b>；官方"大模型"招牌是 <b>MoE 30B-A3B（只激活 3B，约 12 tok/s）</b>。
+  </div>
+
+  <h2>1. 设备信息</h2>
+  <table>
+    <tr><th>项</th><th>值</th></tr>
+    <tr><td>主机名 / 用户</td><td>pingji-k3 / pingji（在 sudo 组）</td></tr>
+    <tr><td>系统</td><td>Bianbu 4.0.1 (Resolute Raccoon)，ID=bianbu</td></tr>
+    <tr><td>内核</td><td>Linux 6.18.3-generic #1.0.1.4 SMP PREEMPT_DYNAMIC riscv64</td></tr>
+    <tr><td>SoC</td><td>SpacemiT K3：X100 ×8 @2.4GHz + A100 ×8 @2.0GHz（共 16 核）</td></tr>
+    <tr><td>内存 / 存储</td><td>15 GiB LPDDR5（无 swap）/ eMMC 119GB（/ 已用 7%）</td></tr>
+    <tr><td>加速器</td><td>IME 矩阵扩展、NPU (<code>/dev/npu0</code>)、VPU 硬编解码</td></tr>
+    <tr><td>网络</td><td>WiFi wlP4p1s0 = 192.168.110.194，出口 ~87Mbps 下 / ~40Mbps 上</td></tr>
+  </table>
+
+  <h2>2. 访问链路</h2>
+  <figure>
+    <img src="fig1.png" alt="K3 访问链路">
+    <figcaption>图 1 · 只能经本机 ssh -L 转发进终端（门户限制 loopback 来源）</figcaption>
+  </figure>
+  <p>门户 <code>http://111.228.40.211:3000</code>（口令登录）。终端 <code>/term/</code> 是定制 ttyd，<b>只允许 loopback 来源</b>，所以要先在本机做本地转发：</p>
+  <pre><code>ssh -N -L 3000:127.0.0.1:3000 root@111.228.40.211
+# 然后打开 http://127.0.0.1:3000/term/</code></pre>
+  <p class="k">坑：ttyd 协议被定制，WebSocket 第一帧必须是认证 JSON <code>{"AuthToken":"","columns":C,"rows":R}</code>，之后才按 <code>'0'+输入</code> 发，否则一敲就断。</p>
+
+  <h2>3. 内存带宽实测（瓶颈所在）</h2>
+  <p>用自写 microbenchmark（8 路独立累加 + RVV + 巨大页）测 CPU 侧可达带宽：</p>
+  <table>
+    <tr><th>测法</th><th>8 线程</th><th>16 线程</th></tr>
+    <tr><td>纯读</td><td>~20 GB/s</td><td>~20 GB/s</td></tr>
+    <tr><td>memcpy（读+写）</td><td>~23 GB/s</td><td>~23 GB/s</td></tr>
+  </table>
+  <div class="callout red">
+    <b>关键点：加核不涨（8→16 线程一样）</b> → 瓶颈是 CPU 复合体到内存的共享端口，不是核心。
+    LPDDR5 标称峰值 52GB/s 是<b>颗粒峰值</b>，普通 CPU 代码拿不到（典型只有 30–60%），这里约 40%。
+  </div>
+
+  <figure>
+    <img src="fig2.png" alt="内存墙">
+    <figcaption>图 2 · 生成是带宽瓶颈：每 token 要把权重读一遍 → tok/s ≈ 带宽 ÷ 权重字节数</figcaption>
+  </figure>
+  <p>8B-Q4 每 token 读 ~5.2GB，理论上限 <code>20GB/s ÷ 5.2GB ≈ 4 t/s</code>，实测 2.9 t/s 已贴近 CPU 能给的极限。</p>
+
+  <h2>4. LLM 推理实测</h2>
+  <table>
+    <tr><th>运行时</th><th>模型</th><th>prompt (pp128)</th><th>生成 (tg)</th></tr>
+    <tr><td>ollama (spacemit 版)</td><td>Qwen3-8B Q4_K_M</td><td>3.6 t/s</td><td><b>2.45 t/s</b></td></tr>
+    <tr><td>llama.cpp (spacemit/IME2)</td><td>Qwen3-8B Q4_K_M</td><td>27.5 t/s</td><td><b>2.86 t/s</b></td></tr>
+    <tr><td>llama.cpp (spacemit/IME2)</td><td>Qwen3.5-2B Q4_0</td><td>115.7 t/s</td><td><b>13.29 t/s</b></td></tr>
+  </table>
+  <p class="k">IME 矩阵扩展只加速<b>算力</b> → prompt 处理快；生成是<b>带宽</b>瓶颈，IME/NPU 都帮不上。</p>
+
+  <figure>
+    <img src="fig3.png" alt="各模型速度对比">
+    <figcaption>图 3 · 官方 model_zoo 各模型生成速度对比</figcaption>
+  </figure>
+
+  <h2>5. 官方「模型动物园」是啥</h2>
+  <p><code>spacemit-ai-gateway</code> + <code>spacemit-ailab</code>：SpacemiT 给 K3 调好的一批模型 + 网页控制台，覆盖 LLM / VLM / Vision / Speech。模型 GGUF 直接放在 <code>archive.spacemit.com/spacemit-ai/model_zoo/</code>。</p>
+  <figure>
+    <img src="fig4.png" alt="加速器分工与模型动物园">
+    <figcaption>图 4 · 加速器分工：LLM→CPU+IME，视觉/语音→NPU，媒体→VPU</figcaption>
+  </figure>
+  <table>
+    <tr><th>模型</th><th>量化</th><th>pp128</th><th>tg128</th></tr>
+    <tr><td>Qwen2.5-0.5B</td><td>Q4_0</td><td>402</td><td>53.7</td></tr>
+    <tr><td>Qwen3-0.6B</td><td>Q4_0</td><td>479</td><td>52.4</td></tr>
+    <tr><td>Qwen3.5-0.8B</td><td>Q4_0</td><td>99</td><td>28.8</td></tr>
+    <tr><td>Qwen3.5-2B</td><td>Q4_0</td><td>78</td><td>16.2</td></tr>
+    <tr><td><b>Qwen3-30B-A3B（MoE，激活 3B）</b></td><td>Q4_0</td><td>56</td><td><b>11.6</b></td></tr>
+  </table>
+  <div class="callout">
+    <b>官方清单里根本没有 8B 稠密模型</b>。他们"大模型"的招牌是 <b>MoE 30B-A3B</b>——每 token 只激活 3B 参数，只用读 ~2GB，所以又快又大。
+    ⚠️ 30B-A3B 的 GGUF 约 18GB，16GB 内存塞不下（会疯狂换页）。
+  </div>
+
+  <h2>6. 硬件视频编解码</h2>
+  <p>板上有硬件 <b>VPU</b>，做 H.264 / H.265 实时编解码（4K），在 ffmpeg 里暴露为 <code>h264_stcodec</code>、<code>h264_v4l2m2m</code>、<code>hevc_v4l2m2m</code>，配套软件 <code>mpp2</code>（SpacemiT Media Processing Platform）。</p>
+  <p class="k">（注意：<code>/dev/vcs*</code> 是虚拟终端，不是编解码器。）硬件编解码对 NVR/直播/转码很实用，但不稀缺（Pi5、RK3588 都有，RK3588 还支持 8K）。</p>
+
+  <h2>7. 结论 & 建议</h2>
+  <div class="callout green">
+    <ul>
+      <li><b>当"便宜 LLM 盒子"不划算</b>：纯推理 CPU 打不过独显；8B ~3 t/s 偏慢。</li>
+      <li><b>当 RISC-V AI 开发板很合适</b>：16 核 + IME + NPU + VPU + UCIe + 16GB，是练 RVV/IME kernel、llama.cpp 后端、NPU/ONNX 移植、性能分析的好平台——<b>这些正是 RISC-V 岗位的核心技能</b>。</li>
+      <li><b>日常用它聊天</b>：换 <b>Qwen3.5-2B</b>（~13 t/s）或 0.8B（~29 t/s）。</li>
+      <li><b>想体验"大模型"</b>：MoE 30B-A3B（需更大内存），或装 <code>spacemit-ailab</code> 跑视觉/语音（NPU 主场）。</li>
+    </ul>
+  </div>
+
+  <h2>附录：复现命令</h2>
+  <pre><code># 官方 ollama（单文件，用户态）
+apt-get download spacemit-ollama-toolkit
+dpkg-deb -x spacemit-ollama-toolkit_*_riscv64.deb ~/ollama-dist
+cp ~/ollama-dist/usr/bin/ollama ~/ollama/bin/
+setsid nohup ~/ollama/bin/ollama serve &gt;~/ollama/serve.log 2&gt;&amp;1 &lt;/dev/null &amp;
+~/ollama/bin/ollama pull qwen3:8b
+~/ollama/bin/ollama run qwen3:8b
+
+# SpacemiT llama.cpp（IME2）+ 官方 2B 模型
+for p in llama.cpp-tools-spacemit spacemit-runtime spacemit-onnxruntime; do apt-get download $p; done
+mkdir -p /tmp/sp &amp;&amp; for f in *.deb; do dpkg-deb -x "$f" /tmp/sp; done
+export LD_LIBRARY_PATH=/tmp/sp/usr/lib
+curl -sSL -o ~/models/Qwen3.5-2B-Q4_0.gguf \
+  https://archive.spacemit.com/spacemit-ai/model_zoo/llm/Qwen3.5-2B-Q4_0.gguf
+/tmp/sp/usr/bin/llama-bench -m ~/models/Qwen3.5-2B-Q4_0.gguf -p 128 -n 128 -t 8</code></pre>
+
+  <footer>
+    由远程会话生成 · 图用 Excalidraw 绘制（源文件 d1~d4.json 可再编辑）· 数据为一次性实测，受频率/温度影响会有波动。
+  </footer>
+</div>
+</body>
+</html>

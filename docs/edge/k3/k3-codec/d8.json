@@ -1,0 +1,14 @@
+{
+  "title": "VPU 硬解：问题与绕行",
+  "width": 1120,
+  "height": 400,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 560, "y": 28, "text": "VPU 硬解：问题 与 绕行", "fontSize": 25, "subtitle": "坏的是 ffmpeg 封装；VPU 本体可用" },
+    { "type": "rectangle", "id": "a", "x": 40, "y": 130, "width": 310, "height": 150, "label": "ffmpeg 封装（失败）", "annotation": "v4l2m2m 像素格式不符->内核挂死(D态)；stcodec 缺 MPP 模块->段错误", "fill": "#fcc2d7", "rounded": true },
+    { "type": "rectangle", "id": "b", "x": 410, "y": 130, "width": 300, "height": 150, "label": "MPP C API 直连（绕行）", "annotation": "SYS_Init + VB_Init + VDEC_*（libmpp.so）· 必须以 root 运行", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "c", "x": 770, "y": 130, "width": 310, "height": 150, "label": "VPU 出帧 OK", "annotation": "149/150 帧 · 297fps · CPU 0.11s（软解 2.87s）", "fill": "#b2f2bb", "rounded": true },
+    { "type": "arrow", "from": "a", "to": "b", "label": "绕开" },
+    { "type": "arrow", "from": "b", "to": "c" }
+  ]
+}

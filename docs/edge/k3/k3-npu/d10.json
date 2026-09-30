@@ -1,0 +1,17 @@
+{
+  "title": "K3 的 AI 路径：没有 NPU",
+  "width": 1220,
+  "height": 400,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 610, "y": 28, "text": "K3 的 AI 路径：没有 NPU，同构 AI CPU", "fontSize": 24, "subtitle": "官方定位 RISC-V AI CPU / 同构融合计算；无 NPU ASIC" },
+    { "type": "rectangle", "id": "m", "x": 40, "y": 120, "width": 190, "height": 110, "label": "模型", "annotation": "训练/现成", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "sdk", "x": 280, "y": 120, "width": 250, "height": 110, "label": "spacemit-ai-sdk", "annotation": "x86_64 量化/转换工具链", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "onnx", "x": 580, "y": 120, "width": 180, "height": 110, "label": "ONNX INT8", "annotation": "静态形状", "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "id": "cpu", "x": 810, "y": 120, "width": 370, "height": 110, "label": "CPU：RVV + IME（AI 加速就在这）", "annotation": "spacemit-ort / provider=spacemit 只是 CPU 后端", "fill": "#d0bfff", "rounded": true },
+    { "type": "arrow", "from": "m", "to": "sdk" },
+    { "type": "arrow", "from": "sdk", "to": "onnx" },
+    { "type": "arrow", "from": "onnx", "to": "cpu" },
+    { "type": "text", "x": 610, "y": 300, "text": "官方 AI SDK(ASR/TTS/VAD/LLM/VLM) 全在 CPU 上跑；设备树无 NPU 节点", "fontSize": 16, "subtitle": "所以“NPU 用不上”是因为根本没有 NPU，不是通路问题" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "title": "K3 访问链路",
+  "width": 1080,
+  "height": 360,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 540, "y": 40, "text": "K3 访问链路", "fontSize": 26, "subtitle": "终端只允许 loopback 来源，必须经本机 ssh -L 转发" },
+    { "type": "rectangle", "id": "mac", "x": 40, "y": 140, "width": 190, "height": 100, "label": "你的电脑", "annotation": "浏览器 / 脚本", "fill": "#ffd8a8", "rounded": true },
+    { "type": "rectangle", "id": "portal", "x": 300, "y": 140, "width": 230, "height": 100, "label": "K3 门户", "annotation": "公网机 111.228.40.211:3000", "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "id": "tunnel", "x": 600, "y": 140, "width": 190, "height": 100, "label": "反向隧道", "annotation": "127.0.0.1:2222 → 板:22", "fill": "#99e9f2", "rounded": true },
+    { "type": "rectangle", "id": "board", "x": 860, "y": 140, "width": 190, "height": 100, "label": "K3 板", "annotation": "pingji@pingji-k3", "fill": "#b2f2bb", "rounded": true },
+    { "type": "arrow", "from": "mac", "to": "portal", "label": "ssh -L 3000" },
+    { "type": "arrow", "from": "portal", "to": "tunnel", "label": "ttyd" },
+    { "type": "arrow", "from": "tunnel", "to": "board", "label": "ssh" }
+  ]
+}

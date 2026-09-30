@@ -1,0 +1,26 @@
+{
+  "title": "为什么 whisper 慢、zipformer 快",
+  "width": 1160,
+  "height": 560,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 580, "y": 28, "text": "为什么 whisper 慢、zipformer 快", "fontSize": 25, "subtitle": "结构不同：整窗重算 vs 分块增量" },
+    { "type": "text", "x": 40, "y": 88, "text": "Whisper：编码-解码 Transformer（非流式，整窗重算）", "fontSize": 17, "align": "start" },
+    { "type": "rectangle", "id": "a1", "x": 40, "y": 120, "width": 150, "height": 90, "label": "音频", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "a2", "x": 240, "y": 120, "width": 210, "height": 90, "label": "垫到 30s 窗口", "annotation": "固定 1500 帧", "fill": "#ffd8a8", "rounded": true },
+    { "type": "rectangle", "id": "a3", "x": 500, "y": 120, "width": 260, "height": 90, "label": "全长自注意力编码", "annotation": "每段音频重算整窗 O(n^2)", "fill": "#ffc9c9", "rounded": true },
+    { "type": "rectangle", "id": "a4", "x": 810, "y": 120, "width": 250, "height": 90, "label": "自回归解码", "annotation": "逐 token 生成", "fill": "#ffc9c9", "rounded": true },
+    { "type": "arrow", "from": "a1", "to": "a2" },
+    { "type": "arrow", "from": "a2", "to": "a3" },
+    { "type": "arrow", "from": "a3", "to": "a4" },
+    { "type": "text", "x": 40, "y": 258, "text": "Zipformer 流式 RNN-T（流式，分块增量）", "fontSize": 17, "align": "start" },
+    { "type": "rectangle", "id": "b1", "x": 40, "y": 290, "width": 150, "height": 90, "label": "音频", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "b2", "x": 240, "y": 290, "width": 210, "height": 90, "label": "切成 chunk", "annotation": "~0.32s / 块", "fill": "#d0bfff", "rounded": true },
+    { "type": "rectangle", "id": "b3", "x": 500, "y": 290, "width": 260, "height": 90, "label": "Zipformer 编码", "annotation": "有限左上下文，省算力", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "b4", "x": 810, "y": 290, "width": 250, "height": 90, "label": "RNN-T joiner", "annotation": "逐块增量输出", "fill": "#b2f2bb", "rounded": true },
+    { "type": "arrow", "from": "b1", "to": "b2" },
+    { "type": "arrow", "from": "b2", "to": "b3" },
+    { "type": "arrow", "from": "b3", "to": "b4" },
+    { "type": "text", "x": 580, "y": 430, "text": "RTF：whisper base 1.85 / small 6.0；zipformer 0.49（≈2x 实时）", "fontSize": 18, "subtitle": "zipformer 每块只算一点、还能边说边出；whisper 每次都要重算 30s 整窗" }
+  ]
+}

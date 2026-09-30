@@ -1,0 +1,17 @@
+{
+  "title": "Mage-VL 视频链路耗时分布",
+  "width": 1120,
+  "height": 430,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 560, "y": 28, "text": "Mage-VL 视频链路：瓶颈在哪", "fontSize": 25, "subtitle": "3 秒片段 / 16 canvas（单位 ms）" },
+    { "type": "rectangle", "id": "vid", "x": 40, "y": 140, "width": 190, "height": 120, "label": "视频解码", "annotation": "container ~26ms（含 H.264 解码）", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "vit", "x": 280, "y": 140, "width": 300, "height": 120, "label": "Mage-ViT 编码", "annotation": "~68690ms  ← 瓶颈（96%+）", "fill": "#ffc9c9", "rounded": true },
+    { "type": "rectangle", "id": "epfe", "x": 630, "y": 140, "width": 210, "height": 120, "label": "StreamMind EPFE", "annotation": "~177ms", "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "id": "cls", "x": 890, "y": 140, "width": 190, "height": 120, "label": "分类器", "annotation": "~2230ms", "fill": "#a5d8ff", "rounded": true },
+    { "type": "arrow", "from": "vid", "to": "vit" },
+    { "type": "arrow", "from": "vit", "to": "epfe" },
+    { "type": "arrow", "from": "epfe", "to": "cls" },
+    { "type": "text", "x": 560, "y": 320, "text": "硬解（VPU）只作用于最左边的视频解码 ~26ms；Mage-ViT 是纯矩阵/注意力算力", "fontSize": 16, "subtitle": "→ 硬件编解码对 Mage-ViT 没有加速意义（它又不是在解码视频）" }
+  ]
+}

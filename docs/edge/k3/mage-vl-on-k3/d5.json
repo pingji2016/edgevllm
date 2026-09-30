@@ -1,0 +1,166 @@
+{
+  "title": "Mage-VL 在 K3 上的现状",
+  "width": 1100,
+  "height": 600,
+  "background": "#FAF8F5",
+  "elements": [
+    {
+      "type": "text",
+      "x": 550,
+      "y": 30,
+      "text": "Mage-VL 在 K3 上的现状",
+      "fontSize": 26,
+      "subtitle": "图片已跑通；视频卡在预处理；NPU 帮不上"
+    },
+    {
+      "type": "text",
+      "x": 40,
+      "y": 96,
+      "text": "图片问答 · 已跑通",
+      "fontSize": 17,
+      "align": "start"
+    },
+    {
+      "type": "rectangle",
+      "id": "ia",
+      "x": 40,
+      "y": 130,
+      "width": 150,
+      "height": 90,
+      "label": "图片",
+      "annotation": "resize <=336px",
+      "fill": "#ffd8a8",
+      "rounded": true
+    },
+    {
+      "type": "rectangle",
+      "id": "ib",
+      "x": 250,
+      "y": 130,
+      "width": 220,
+      "height": 90,
+      "label": "Mage-ViT 编码",
+      "annotation": "1 chunk ~4.5s",
+      "fill": "#a5d8ff",
+      "rounded": true
+    },
+    {
+      "type": "rectangle",
+      "id": "ic",
+      "x": 530,
+      "y": 130,
+      "width": 220,
+      "height": 90,
+      "label": "Qwen3-4B 生成",
+      "annotation": "Q4 · 几 t/s",
+      "fill": "#d0bfff",
+      "rounded": true
+    },
+    {
+      "type": "rectangle",
+      "id": "id",
+      "x": 810,
+      "y": 130,
+      "width": 240,
+      "height": 90,
+      "label": "文字回答",
+      "annotation": "a dog sitting on a rug",
+      "fill": "#b2f2bb",
+      "rounded": true
+    },
+    {
+      "type": "arrow",
+      "from": "ia",
+      "to": "ib"
+    },
+    {
+      "type": "arrow",
+      "from": "ib",
+      "to": "ic"
+    },
+    {
+      "type": "arrow",
+      "from": "ic",
+      "to": "id"
+    },
+    {
+      "type": "text",
+      "x": 40,
+      "y": 286,
+      "text": "视频理解 · 暂不可用",
+      "fontSize": 17,
+      "align": "start"
+    },
+    {
+      "type": "rectangle",
+      "id": "va",
+      "x": 40,
+      "y": 320,
+      "width": 150,
+      "height": 90,
+      "label": "视频",
+      "annotation": "mp4 / rtsp",
+      "fill": "#ffd8a8",
+      "rounded": true
+    },
+    {
+      "type": "rectangle",
+      "id": "vb",
+      "x": 250,
+      "y": 320,
+      "width": 220,
+      "height": 90,
+      "label": "codec 预处理",
+      "annotation": "codec-video-prep（PyPI 无）",
+      "fill": "#fcc2d7",
+      "rounded": true
+    },
+    {
+      "type": "rectangle",
+      "id": "vc",
+      "x": 530,
+      "y": 320,
+      "width": 220,
+      "height": 90,
+      "label": "MAGECV1 片段",
+      "annotation": "streammind-e2e 已编译",
+      "fill": "#dee2e6",
+      "rounded": true
+    },
+    {
+      "type": "rectangle",
+      "id": "vd",
+      "x": 810,
+      "y": 320,
+      "width": 240,
+      "height": 90,
+      "label": "流式理解",
+      "annotation": "CPU 上极慢，非实时",
+      "fill": "#dee2e6",
+      "rounded": true
+    },
+    {
+      "type": "arrow",
+      "from": "va",
+      "to": "vb"
+    },
+    {
+      "type": "arrow",
+      "from": "vb",
+      "to": "vc"
+    },
+    {
+      "type": "arrow",
+      "from": "vc",
+      "to": "vd"
+    },
+    {
+      "type": "text",
+      "x": 550,
+      "y": 470,
+      "text": "NPU 用不上：Mage-VL 走 llama.cpp/GGUF（CPU）；NPU 只跑 ONNX 小视觉模型，且不支持 Mage 的自定义算子（3D RoPE / temporal patch）",
+      "fontSize": 15,
+      "subtitle": "视频成本 = 视觉 token 数 × 注意力；降采样/减帧才是有效手段"
+    }
+  ]
+}
