@@ -56,6 +56,20 @@
   和 [DESIGN.zh-CN.md](docs/whisperlive/DESIGN.zh-CN.md)（13 条特殊处理逐条拆解、
   两个后端差异、代码走读顺序）。
 
+- [docs/realtime-media/](docs/realtime-media/) —— 实时人脸与变声（综述 + 本机实测）
+
+  把「手机摄像头前的人脸滤镜/换脸」和「实时变声」两件事拆开：
+  [01](docs/realtime-media/01-face-filters.md) 人脸滤镜（478 点关键点、局部变形，
+  实测检测 10.3 ms vs 全图变形 97.6 ms、ROI 后 7.4 ms）、
+  [02](docs/realtime-media/02-face-swap.md) 换脸（五点位对齐 → ArcFace 身份向量 →
+  emap/AdaIN → 贴回，一条 CPU 上跑通的流水线，逐阶段耗时）、
+  [03](docs/realtime-media/03-voice-pitch-and-formant.md) 音高与共振峰（`formant=preserved`
+  到底保住了什么，含合成元音真值校验）、
+  [04](docs/realtime-media/04-voice-neural.md) 神经变声（RVC 一族、延迟与设备链路）、
+  [05](docs/realtime-media/05-realtime-engineering.md) 实时工程（延迟预算、分块伪影、
+  无锁缓冲）。所有实验器材都是**程序化合成**的人脸与 TTS 语音，不含真人素材；
+  脚本与复现命令见 [scripts/](docs/realtime-media/scripts/)。
+
 ## 示例
 
 - [examples/](examples/) —— 可直接编译运行的代码
