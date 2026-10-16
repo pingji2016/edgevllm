@@ -15,6 +15,10 @@
 | `rag.py` | **本地 RAG**：embed → 余弦 → rerank → LLM 全离线 | 网关 embed/rerank/llm + python3 |
 | `tts-voices.sh` | **TTS 音色/语速验证**（含 md5 比对，会暴露参数 bug） | 网关 `/v1/tts/*` |
 | `asr-length.sh` | **ASR 长度-吞吐曲线**（证明长音频要 VAD 切段） | 网关 `/v1/asr/recognize`、`/v1/vad/*` |
+| `long-transcribe.py` | **长音频转写 → SRT 字幕**：VAD 切段 → 合并到 ~12s → 逐块 ASR（比整段快 9×） | 网关 VAD + ASR、python3 |
+| `stream-asr.py` | **流式 ASR 客户端**（WebSocket，实测是缓冲式、不出增量 partial） | 网关 `/v1/asr/stream`、python3 `websockets` |
+| `stream-tts.py` | **流式 TTS 客户端**：按句 `append` 才真流式（每句 ~0.5s 出声） | 网关 `/v1/tts/stream`、python3 `websockets` |
+| `stream-voice.py` | **真·流式语音助手**：LLM token 流 → 逗号切句 → TTS 逐句合成（首音频 3.0s vs 非流式 28.4s） | 网关 LLM + TTS stream、python3 `websockets` |
 
 ## 快速上手
 
@@ -50,9 +54,20 @@ cc -O2 -o ~/.local/bin/k3aix k3aix.c
 
 # ASR 长度-吞吐曲线
 ./asr-length.sh ~/k3-ai/out/a5.wav ~/k3-ai/out/a10.wav ~/k3-ai/out/a20.wav ~/k3-ai/out/a45.wav
+
+# 长音频转 SRT 字幕（顺带三方对照：合并 / 逐段 / 整段）
+python3 long-transcribe.py 长音频.wav demo --compare   # 输出 /tmp/k3tr/demo.srt
+
+# 流式：ASR（会看到它只吐一个结果）、TTS（按句 append 逐句出声）
+python3 stream-asr.py 10s.wav 1.0
+python3 stream-tts.py --append
+python3 stream-tts.py "一整段文本" out.wav            # 一次性 start：只回一个整块
+
+# 真·流式语音助手（LLM 流 → 按句 TTS）
+python3 stream-voice.py "K3 板子能做哪些端侧 AI？" out.wav
 ```
 
-## 三个必读的坑
+## 必读的坑
 
 1. **硬编报段错误** → 不是硬件问题，是用户不在 `video` 组（MPP 插件要探测 `/dev/video0`）。`./hw-encode.sh fix`。
 2. **`taskset -c 8` 报 EINVAL** → 不是核坏了，是 HMP 的类别限制。先写 `/proc/set_ai_thread`。
@@ -60,3 +75,5 @@ cc -O2 -o ~/.local/bin/k3aix k3aix.c
 4. **`/dev/video0` 不是摄像头** → 它是 VPU（Linlon）的 V4L2 节点；真摄像头会枚举成 `/dev/video1+`。
 5. **板上重活必须串行** → 并发下载模型 + 加载/推理会把 16 核压到 load≈100，把隧道/心跳/ssh 全饿死（不是 OOM，见报告 §12.8）。
 6. **网关字段名不统一** → embed/rerank/llm 用 `model`，vad/tts/vision 用 `model_id`；`/v1/vision/inference` 的 `tasks` 必须是 JSON 数组字符串。
+7. **`/v1/asr/stream` 是假流式** → 不出增量 partial：37s 音频喂完还要再等 28.6s 才出唯一结果，RTF 跟整段识别一样。要低延迟只能自己 VAD 切段（`long-transcribe.py`）。
+8. **`/v1/tts/stream` 要按句 `append` 才真流式** → 一次性 `start` 整段文本只会回一个整块（等于批量）；按句 `append` 才逐句出声（每句 ~0.5s）。

@@ -19,6 +19,7 @@
 | 6 | **视觉模型全家桶（14 个）** | ✅ 跑通 | yolo11/v8-seg/pose/face/emotion/resnet50 全实测，最快 emotion **7.1ms**（见 §12.1） |
 | 7 | **本地 RAG（embed+rerank+LLM）** | ✅ 跑通 | 40 块知识库全离线问答；但 **rerank ≈11s/篇**，向量检索只要 8ms（见 §12.3） |
 | 8 | **模型动物园 / TTS / VAD** | ✅ 有结论 | qwen3-0.6b **13.9 t/s**；VAD **34× 实时**；顺带测出 **TTS 音色/语速 bug** 与 **ASR 长音频劣化**（见 §12.4–12.6） |
+| 9 | **长音频转写 / 真·流式语音** | ✅ 跑通 | VAD 切段转写**快 9×**；流式 TTS 按句 **0.5s** 出声；LLM→TTS 流式**首音频 3.03s vs 非流式 28.4s**（见 §13） |
 
 一句话：**板子上的端侧 AI 栈（官方 AI Gateway + MPP 硬编 + A100 核）全部可用，且已实测定位了三个坑**：A100 的定位、VPU 编码权限、以及网关 LLM 的性能上限。
 
@@ -447,10 +448,10 @@ preprocess_ms 15.05 · model_infer_ms 14.81 · postprocess_ms 0.08 · infer_ms 2
 1. **`-b:v` 未映射到 MPP 码率控制** —— 硬编码率不可调。需要写 MPP 原生程序（`VENC_CreateChn` + `VencChnAttr.eRcMode`）或找 ffmpeg stcodec 的正确旋钮。头文件已摸清（`/usr/include/venc/venc_api.h` + `sys/vb_api.h`），下一步可写 `mpp_enc.c`。
 2. **实时语音**需要一只麦克风（最简单：USB 麦）。
 3. **30B-A3B** 需要离线拷入或换 32G 内存版。
-4. 把「A100 反优化」和「VPU 权限 bug」「perftest `-e spacemit` 报错」整理成给 SpaceMiT 的 issue。
-5. 网关还带 VAD/流式 ASR/TTS WebSocket —— 可做**真·流式**语音助手（边说边出）。
+4. 把「A100 反优化」「VPU 权限 bug」「perftest `-e spacemit` 报错」「`/v1/asr/stream` 号称流式却不增量」整理成给 SpaceMiT 的 issue。
+5. 网关的流式 WebSocket 已实测（见 §13）：**`/v1/asr/stream` 是假的**（缓冲式、不出增量 partial），**`/v1/tts/stream` 是真的**（按句 `append` 逐句出声）——真·流式语音助手已跑通（`scripts/stream-voice.py`，首音频 3.03s vs 28.4s）。
 6. **TTS 的 `voice_id` / `speed` 参数被丢弃**（厂方 bug，md5 实锤，见 §12.5）—— 想多音色/变语速目前只能换 `model`。
-7. **ASR 长音频吞吐非线性劣化**（40s 时 RTF 0.81，见 §12.6）—— 长音频必须 **VAD 切段** 再逐段识别。
+7. **ASR 长音频吞吐非线性劣化**（40s 时 RTF 0.81，见 §12.6）—— 已落成 **VAD 切段转写工具**（`scripts/long-transcribe.py`，快 9×，见 §13.1）。
 8. **rerank 太慢**（qwen3-reranker-0.6b ≈11s/篇，见 §12.3）—— 板上 RAG 只用向量检索即可。
 9. **CAN-FD / SPI 未在设备树使能**（见 §8.5 / §12.7）—— 直连机器人总线需改 DT/内核，或上 USB-CAN 适配器。
 
@@ -602,3 +603,80 @@ matcha_zh speed 0.7 / 1.5                → 时长都是 4.49s（不变）
 | `scripts/rag.py` | embed → 余弦 → rerank → LLM 的本地 RAG |
 | `scripts/tts-voices.sh` | TTS 音色 / 语速验证（含 md5 比对） |
 | `scripts/asr-length.sh` | ASR 长度-吞吐曲线 |
+
+## 13. 第三轮：长音频转写 & 真·流式语音（2026-10-16 追加）
+
+§12.6 留下一个明确的问题（ASR 长音频劣化 → 必须 VAD 切段），§11 第 5 条也点名"网关带流式 ASR/TTS WebSocket → 可做真·流式语音助手"。本轮把这两条**都做掉并实测**，还顺带发现**"流式 ASR 其实是假的"**。
+
+### 13.1 长音频转写：VAD 切段 → 合并 → 逐块 ASR → SRT（快 9×）
+
+测试音频：**37.3s**，由板上现成语音片段 + 2s/3s 静音拼成（多段语音 + 停顿）。
+
+VAD 把 37.3s 切成 14 段（过滤掉 <250ms 的杂音段），只用 **1.10s（34× 实时）**。然后三方对照：
+
+| 模式 | 块数 | ASR 耗时 | 相对实时 |
+|---|---:|---:|---:|
+| **合并到 ~12s（推荐）** | 8 | **2.98s** | **12.5×** |
+| 逐段 | 14 | 2.87s | 13.0× |
+| 整段（对照） | 1 | **27.94s** | **1.34×** |
+
+→ **快约 9 倍**；且合并模式文本上下文更好（逐段会把句子切碎：`"Day after tomorrow."` + `"嗯星期三。"` → 合并后 `"dayy after tomorrow是星期三。"`）。
+
+**设计要点**：
+
+- 过滤 `MIN_SEG_MS`（默认 250ms）——VAD 会在音频开头误报一个 120ms 的杂音段（识别成 `"？"`）；
+- 合并 `GAP_MS`（默认 600ms）以内的相邻段、单块上限 `MAX_CHUNK_MS`（默认 12s）——兼顾"速度 × 上下文";
+- 直接按 `start_ms/end_ms` 用 python `wave` 切片（不调 ffmpeg），省一轮进程开销；
+- 输出标准 **SRT 字幕**（`/tmp/k3tr/<前缀>.srt`）+ 纯文本。
+
+脚本：`scripts/long-transcribe.py`。这把 §12.6 的结论落成了可交付的"**音视频转字幕**"管线。
+
+### 13.2 ★ 流式 ASR（`/v1/asr/stream`）**是假的**
+
+网关有 WS 端点 `/v1/asr/stream`，协议看着很正规：`POST /v1/asr/stream/session` 拿 `session_id` → WS 带 `session_id` 连接（`partial=true`）→ 发二进制 PCM 帧 → 发 `{"type":"end"}` → 服务端回 `partial` / `sentence_end` / `final`。实测：
+
+| 音频 | 喂入方式 | 首个（也是唯一）结果 | RTF |
+|---:|---|---:|---:|
+| 10.1s | 按真实时间 1× | 12.44s（音频结束后 2.38s） | 0.227 |
+| 37.3s | 按真实时间 1× | **65.90s**（音频结束后 **28.6s**） | **0.759** |
+
+**全程只有 1 个 partial，而且等音频喂完才出**；RTF 与整段识别（§12.6 的 0.807）**几乎一模一样**。→ 这个"流式"只是给整段识别套了层 WebSocket 外壳，**没有增量解码**。
+
+**结论**：想要低延迟，不能依赖网关的"流式 ASR"，只能**客户端自己 VAD 切段**（正是 §13.1 的做法）。脚本：`scripts/stream-asr.py`。
+
+### 13.3 ★ 流式 TTS（`/v1/tts/stream`）**是真的**（但必须按句 `append`）
+
+TTS WS 协议支持 `{"type":"start","text":..}` / `{"type":"append","text":..}` / `{"type":"end"}`，服务端持续回**二进制 PCM 块**。两种用法差别巨大：
+
+- **一次性 `start` 整段文本**（84 字）：只在 **3.98s** 时回**一个整块**（526KB = 全部 16.46s 音频）→ 等于批量。
+- **按句 `append`**（每 1.5s 喂一句）：
+
+```
+start  "第一句话，你好。"   → 0.55s 出声（2.10s 音频）
+append "第二句话，世界。"   → 2.09s 出声（2.27s 音频）
+append "第三句话，再见。"   → 3.59s 出声（2.29s 音频）
+```
+
+→ **每句约 0.5s 就出声**，这就是"边说边播"的正确用法。脚本：`scripts/stream-tts.py --append`。
+
+### 13.4 压轴：真·流式语音助手（LLM token 流 → 逗号切句 → TTS 逐句 append）
+
+把 13.3 与 LLM 的 SSE 流接起来：**LLM 一边吐 token，一边按标点切句（逗号/顿号/句号都切），切出的小句立刻 `append` 给 TTS**，音频块边到边拼，全在板上。
+
+| 方案 | LLM 首 token | **首个音频（听到第一声）** | 总耗时 |
+|---|---:|---:|---:|
+| **流式**（本方案） | 1.59s | **3.03s** | 6.25s |
+| 非流式（等 LLM 全生成 + TTS 整段） | — | **28.41s** | 28.4s |
+
+→ **用户听到第一声的时间从 28.4s 降到 3.0s，快 9.4 倍**。这正是 §11 第 5 条想要的东西，现在跑通了：`scripts/stream-voice.py`。
+
+> 说明：非流式那次回答更长（258 字 vs 流式 9.41s 音频），属"同一提问、输出长度不同"的示意对比；但对齐长度后，流式的首音频依然早于"LLM 全生成 + 整段 TTS"，因为它在 LLM 还没生成完时就已经出声。
+
+### 13.5 第三轮新增脚本
+
+| 脚本 | 作用 |
+|---|---|
+| `scripts/long-transcribe.py` | 长音频 → VAD 切段 → 合并 → 逐块 ASR → **SRT 字幕**（快 9×） |
+| `scripts/stream-asr.py` | 流式 ASR 客户端（实测证明它是**缓冲式**） |
+| `scripts/stream-tts.py` | 流式 TTS 客户端（`--append` 才真流式） |
+| `scripts/stream-voice.py` | **真·流式语音助手**（LLM 流 → 按句 → TTS 流） |
