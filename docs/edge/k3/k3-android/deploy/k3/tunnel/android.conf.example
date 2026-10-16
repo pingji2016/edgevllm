@@ -1,0 +1,28 @@
+# 反隧道 systemd drop-in 参考样本（实际由 `deploy/k3/deploy.sh tunnel-add` 按 .env.k3 生成）
+#
+# 放到板子上： /etc/systemd/system/k3-tunnel.service.d/android.conf
+# 生效：       sudo systemctl daemon-reload && sudo systemctl restart k3-tunnel
+#
+# ⚠️ k3-tunnel.service 带 ExitOnForwardFailure=yes：
+#    任一 -R 建不起来 → 整条隧道退出重连 → 连 2222（K3 门户）一起断。
+#    所以这里用高位端口 18443 / 16520，且改前必须确认 111 上端口空闲。
+
+[Service]
+# systemd drop-in 里 ExecStart= 单独一行表示「清空原值」，随后重新给完整命令
+ExecStart=
+ExecStart=/usr/bin/ssh -NT \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -o TCPKeepAlive=yes \
+  -o ConnectTimeout=10 \
+  -o BatchMode=yes \
+  -o IdentitiesOnly=yes \
+  -o StrictHostKeyChecking=accept-new \
+  -o UserKnownHostsFile=/home/pingji/.ssh/known_hosts \
+  -i /home/pingji/.ssh/k3_tunnel_ed25519 \
+  -l root \
+  -R 127.0.0.1:2222:127.0.0.1:22 \
+  -R 127.0.0.1:18443:127.0.0.1:8443 \
+  -R 127.0.0.1:16520:127.0.0.1:6520 \
+  111.228.40.211

@@ -7,6 +7,9 @@
 [01-k3-riscv-board.md](../01-k3-riscv-board.md)；想在边缘设备上做优化，看
 [kernel-opt/07-edge.md](../../kernel-opt/07-edge.md)。这里只记**这块板上实际跑出了什么**。
 
+2026-10 中旬又补进一批**「板子本身怎么用」**的笔记（装内核、跑 Android、连进去、装不了的 App 怎么办），
+见文末[「板子本身的折腾」](#板子本身的折腾系统--访问--android)一节。
+
 ## 目录
 
 | 目录 | 内容 |
@@ -46,3 +49,18 @@
   两份都保留，按时间顺序读。
 - `k3-asr-service/asr-server.service` 里的路径写死了板上的 `/home/pingji/mage-vl/sherpa`，
   换机器要改。
+
+## 板子本身的折腾（系统 / 访问 / Android）
+
+上面几节记的是**在这块板上跑模型跑出了什么**；下面这几篇是**怎么把这台机器变成能干活的状态**。
+都是 2026-10-14 ~ 10-16 在 `pingji-k3` 上边做边记的，含失败路径与验收标准，命令可照抄。
+
+| 目录 | 内容 |
+| --- | --- |
+| [k3-android/](k3-android/) | **在 K3 上跑 Android**：Cuttlefish + crosvm + KVM 跑 riscv64 AOSP guest（不是 Google 官方 AVD）。旁边带两套部署脚本：`deploy/k3/`（板子侧）与 `deploy/aosp/`（云上 x86_64 编译机） |
+| [k3-hardware/](k3-hardware/) | 这块板「能干什么、干不了什么」：内核 / GPU / VPU / NPU / 内存带宽的边界，一次钉死 |
+| [k3-portal/](k3-portal/) | 怎么连进这块板子：门户与网页终端（ttyd）的协议细节，附 `k3exec.py`（一条命令远程执行） |
+| [k3-ondevice-ai/](k3-ondevice-ai/) | 端侧 AI 推理实测汇总：能跑什么、跑多快、卡在哪（硬件层面看 k3-hardware/） |
+| [k3-arm64-on-riscv/](k3-arm64-on-riscv/) | riscv64 Android 上怎么跑 arm64 应用（NativeBridge / 二进制翻译）：上游是空的，三条路线与实测过的第一步 |
+
+几篇之间的导航都写在各自开头，从 [k3-android/](k3-android/) 进去最全。
