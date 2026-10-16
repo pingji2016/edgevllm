@@ -16,6 +16,9 @@
 | 4 | **VPU 硬编** | ✅ **修好了** | 根因是权限 bug；修后 1080p150帧 **1.09s**，比 x264 快 4.8×、CPU 少 144× |
 | 5 | **ONNX / YOLO** | ✅ 跑通 | YOLOv8n int8 单帧 **14.8ms**（≈56× 于 CPU EP），真实检出已验证 |
 | ★ | **A100 / IME 能否自助开启** | ✅ **能，已验证** | 写 `/proc/set_ai_thread` 即解锁；但**开出来跑 llama.cpp 是负优化** |
+| 6 | **视觉模型全家桶（14 个）** | ✅ 跑通 | yolo11/v8-seg/pose/face/emotion/resnet50 全实测，最快 emotion **7.1ms**（见 §12.1） |
+| 7 | **本地 RAG（embed+rerank+LLM）** | ✅ 跑通 | 40 块知识库全离线问答；但 **rerank ≈11s/篇**，向量检索只要 8ms（见 §12.3） |
+| 8 | **模型动物园 / TTS / VAD** | ✅ 有结论 | qwen3-0.6b **13.9 t/s**；VAD **34× 实时**；顺带测出 **TTS 音色/语速 bug** 与 **ASR 长音频劣化**（见 §12.4–12.6） |
 
 一句话：**板子上的端侧 AI 栈（官方 AI Gateway + MPP 硬编 + A100 核）全部可用，且已实测定位了三个坑**：A100 的定位、VPU 编码权限、以及网关 LLM 的性能上限。
 
@@ -295,7 +298,7 @@ K3 的接口非常"机器人友好"，但**现在板子上一个都没插**。�
 
 | 外设 | 接到哪 | K3 上的现状 |
 |---|---|---|
-| **摄像头** | MIPI-CSI | 内核带 OV5647/OV2735 驱动 + `libvi_k3_cam_plugin.so`，**插上即用**；当前 `--camera` 会抓 `/dev/video0` |
+| **摄像头** | MIPI-CSI | 内核带 OV5647/OV2735 驱动 + `libvi_k3_cam_plugin.so`，**插上即用**。⚠️ 但 `/dev/video0` **不是摄像头**（它是 VPU 的 V4L2 节点，见 §8.5），真摄像头会枚举成 `/dev/video1+`，`--camera` 要传对编号 |
 | 深度/RGBD | USB3 | 免驱（V4L2），最省事 |
 | **麦克风阵列** | I2S/PDM | 声卡 ES8326 已就绪（**只支持立体声**）；当前无麦 → 语音必须改成实时需插麦 |
 | IMU | SPI/I2C | 板子有 I2C/SPI 排针 |
@@ -324,7 +327,13 @@ K3 的接口非常"机器人友好"，但**现在板子上一个都没插**。�
 - **急停按钮**（接 GPIO，硬线切断电机使能），
 - 电流/温度监测（CAN 或 I2C 传感）。
 
-### 8.5 给这套板子的架构建议
+### 8.5 实况核对：这些接口现在真的使能了吗？（带更正）
+
+> 逐条实测见 §12.7。一句话：**I2C/UART/PWM/GPIO/USB 都在；CAN-FD 和 SPI 在当前设备树里没使能**（芯片有），
+> `/dev/video0` 也**不是摄像头而是 VPU 节点**。要 CAN 直连关节电机，得先改 DT/内核（需人在现场），
+> 否则图省事就直接上 **USB-CAN 适配器**（免改 DT）。
+
+### 8.6 给这套板子的架构建议
 
 ```
 感知层  摄像头(MIPI-CSI) + 麦阵(I2S) + IMU(I2C) + ToF
@@ -440,3 +449,156 @@ preprocess_ms 15.05 · model_infer_ms 14.81 · postprocess_ms 0.08 · infer_ms 2
 3. **30B-A3B** 需要离线拷入或换 32G 内存版。
 4. 把「A100 反优化」和「VPU 权限 bug」「perftest `-e spacemit` 报错」整理成给 SpaceMiT 的 issue。
 5. 网关还带 VAD/流式 ASR/TTS WebSocket —— 可做**真·流式**语音助手（边说边出）。
+6. **TTS 的 `voice_id` / `speed` 参数被丢弃**（厂方 bug，md5 实锤，见 §12.5）—— 想多音色/变语速目前只能换 `model`。
+7. **ASR 长音频吞吐非线性劣化**（40s 时 RTF 0.81，见 §12.6）—— 长音频必须 **VAD 切段** 再逐段识别。
+8. **rerank 太慢**（qwen3-reranker-0.6b ≈11s/篇，见 §12.3）—— 板上 RAG 只用向量检索即可。
+9. **CAN-FD / SPI 未在设备树使能**（见 §8.5 / §12.7）—— 直连机器人总线需改 DT/内核，或上 USB-CAN 适配器。
+
+## 12. 第二轮扩展实验：把网关的余量榨干（2026-10-16 追加）
+
+第 1 节说了网关有 128 个端点。第二轮把它们**挨个试了一遍**，另外补了三个可上报的厂方问题。
+
+### 12.1 视觉模型全家桶（14 个，单帧 `model_infer_ms`）
+
+一次把网关里能下的视觉模型全下下来跑（测试图用 ultralytics 经典图 `bus.jpg` / `zidane.jpg`，都含人，可同时测 detect / pose / segment）：
+
+| 模型 | 任务 | 推理 ms | 模型 | 任务 | 推理 ms |
+|---|---:|---:|---|---:|---:|
+| emotion | 表情 | **7.1** | yolov8s-pose | 姿态 | 27.3 |
+| resnet50 | 分类 | **7.7** | yolov5-face | 人脸 | 28.4 |
+| yolov8n | 检测 | **14.3** | yolov11s | 检测 | 30.9 |
+| yolov8n-pose | 姿态 | 16.2 | yolov8s-seg | 分割 | 32.5 |
+| yolov8n-seg | 分割 | 19.6 | yolov8m | 检测 | 48.0 |
+| yolov11n | 检测 | 20.1 | yolov11m | 检测 | 65.2 |
+| yolov5-gesture | 手势 | 21.4 | yolov8s | 检测 | 24.8 |
+
+> 首次 `load` 会从 CDN 现下（yolov8m 79s、yolov11m 116s），下完即用。
+
+观察：
+- **yolo11 与 yolo8 同档性能接近**（yolov11s 比 yolov8s 多检出 1 个目标，也多 1 个假阳性 `hydrant`）。
+- 小目标假阳性：`yolov8s/m` 把领带 / 盆栽当成目标（0.50~0.54）。
+- **resnet50 把整张 `bus.jpg` 认成 `minibus 0.61`** —— 分类模型不适合多目标图，正常。
+- `yolov5-gesture` 在公交照上 0 检出（需要近景手部）；`emotion` 在 `zidane` 上判 `neutral`。
+- `pose` 结果的 `label_name` 是 `null`（只有 score），要取关键点得读 `keypoints` 字段。
+
+### 12.2 VAD（silero）：**34× 实时**
+
+```
+/v1/vad/analyze   10s 音频 → is_speech=true, prob 0.9999, processing_ms 288
+/v1/vad/segments  10s 音频 → 5 段（0.84–2.46s … 8.91–10.05s），speech_ratio 0.63
+```
+
+`processing_ms 288 / 10000ms = 0.029` → **比 ASR 快约 30 倍**。长音频的正确姿势是 **先 VAD 切段、再逐段 ASR**（见 §12.6）。
+
+### 12.3 Embedding + Rerank → **本地 RAG 全链路跑通**
+
+知识库：把本报告的 Markdown 切 40 块（每块 ~277 字）。查询链路 `embed → 余弦 → rerank → LLM` 全部在板上。
+
+```
+embed   bge-small-zh-v1.5-q4_k_m   512 维   索引 40 块 8.17s（4.9 块/s；稳态 35.5 条/s）
+rerank  qwen3-reranker-0.6b-q4_0
+LLM     qwen3.5-2b
+```
+
+三个真实提问，回答**全部 grounded 在报告里**（摘录）：
+
+| 提问 | 检索 top3 块 | 回答要点 |
+|---|---|---|
+| A100 适不适合跑 llama.cpp？ | [12,14,31] | "向量/矩阵专用核…强行跑通用 Q4 慢 5.8×…正确姿势是 IME 算子 + int8" |
+| VPU 硬编为什么一开始段错误？ | [16,19,39] | "根因是权限 bug，`h264_stcodec` 段错误" |
+| 机器人需要哪些外设？ | [31,33,35] | 逐条列出 CAN-FD / PWM / UART / MIPI-CSI / 急停… |
+
+**★ 但 RAG 的瓶颈在 rerank：**
+
+| 阶段 | 耗时 |
+|---|---:|
+| 查询 embedding | 0.05s |
+| 余弦检索（40 块） | **0.008s** |
+| **rerank（6 篇文档）** | **65–74s** |
+| LLM 生成 | 90–120s（79–272 token，4.9 t/s） |
+
+`qwen3-reranker-0.6b` 是生成式打分，**≈11s/篇**，比向量检索贵约 8000 倍。**结论：板上做 RAG 就该只用向量检索**（8ms），rerank 要么去掉、要么换 cross-encoder、要么离线预排。
+
+脚本：`scripts/rag.py`（板上配套 `~/k3-ai/rag/`）。
+
+### 12.4 LLM 模型动物园（都是本机 gguf，零下载切换）
+
+用 `/v1/llm/models/register`（`source_type: local_path`）把三个新模型挂上去，`switch` 后实测：
+
+| 模型 | 用途 | 加载 | 生成速度 | 备注 |
+|---|---|---:|---:|---|
+| **qwen3-0.6b-q4_0** | 快聊 | 4.3s | **13.9 t/s** | 最快，适合"意图解析 / 槽位提取"这类前置小任务 |
+| **hy-mt1.5-1.8b-q4_k_m** | 翻译专用 | 5.3s | 7.0 t/s | 中→英译文准确（"…4.8 times faster…144 times less CPU"） |
+| **deepseek-r1-distill-qwen-1.5b** | 推理 | 4.4s | 6.1 t/s | 带完整思维链，数学题答案 ✅（`\boxed{6}`） |
+| qwen3.5-2b（基线） | 通用 | — | ~6.3 t/s | |
+
+**组合思路**：0.6B 做"路由器 / 改写"，2B 做对话主力，R1 只在前置判断需要推理时临时切过去。
+
+### 12.5 TTS 音色 + 速度曲线 + 一个实锤 bug
+
+`/v1/tts/voices` 给了 6 个音色（`default` zh/en/zh-en、`zf_xiaobei` 小贝、`zm_yunxi` 云希、`af_heart`）。
+
+| 模型 | 5.4s 语音合成耗时 | RTF | 评价 |
+|---|---:|---:|---|
+| **matcha_zh** | **0.84s** | **0.183** | 5.5× 实时，**唯一适合实时**的 |
+| kokoro | 22–32s | 3.6–5.3 | **0.2–0.3× 实时，太慢** |
+
+**★ 厂方 bug：`voice_id` / `speed` 参数完全没生效。** 用**全新文本**排除缓存干扰后：
+
+```
+kokoro zf_xiaobei / zm_yunxi / af_heart  → md5 全部 29a115b7…（三个人声一模一样）
+kokoro speed 0.7 / 1.5                   → md5 全部 118beecb…（改语速没反应）
+matcha_zh speed 0.7 / 1.5                → 时长都是 4.49s（不变）
+不同 model                                → md5 各不相同 ✅（证明不是缓存问题）
+```
+
+→ 只有 `model` 生效，**音色和语速被丢弃**。复现：`scripts/tts-voices.sh`。
+
+### 12.6 ★ ASR 吞吐随音频长度非线性劣化
+
+同一个 SenseVoice，喂 4 个不同长度的音频（都来自板上现成稿件拼接）：
+
+| 音频 | 处理耗时 | RTF | 相对实时 |
+|---:|---:|---:|---:|
+| 5.1s | 0.77s | **0.150** | 6.7× |
+| 10.1s | 2.17s | 0.216 | 4.6× |
+| 20.1s | 8.14s | 0.405 | 2.5× |
+| 40.2s | 32.5s | **0.807** | **1.2×** |
+
+**处理时间随长度近似二次增长**（attention 没有分块）。→ **绝不要把长音频整段丢给 `/v1/asr/recognize`**：先用 `/v1/vad/segments`（34× 实时）切段，再逐段识别，整体能拉回 RTF≈0.15。脚本：`scripts/asr-length.sh`。
+
+### 12.7 外设实况更正（对应 §8）
+
+在板上把总线挨个点了一遍，**§8 有两处要更正**：
+
+| 接口 | §8 原说法 | 实测 |
+|---|---|---|
+| **CAN-FD ×10** | "机器人总线直连" | ❌ `ip link` 里**没有 `can0`** —— 芯片有，**当前 DT/镜像没使能** |
+| **SPI** | "板子有 I2C/SPI 排针" | ❌ 无 `/dev/spidev*`，**未暴露** |
+| I2C | — | ✅ `/dev/i2c-{1,2,3,8,9,10,11,12}` ×8 |
+| UART | ×17 | ✅ `/dev/ttyS0..16` 全在 |
+| PWM | ×30 | ✅ `pwmchip0`、`pwmchip1` 两个控制器 |
+| GPIO | — | ✅ `/dev/gpiochip0..3` |
+| USB | — | ✅ 6 条总线（2× USB3 + 4× USB2），当前只挂了 RTL8852BE 蓝牙 |
+| **`/dev/video0`** | 当成摄像头 | ❌ 它是 **VPU（Linlon，`platform:mvx`，cores=4）的 V4L2 节点**，不是 camera |
+
+→ **想直连 CAN 关节电机，必须先改 DT/内核（需人在现场）**；图省事就直接上 **USB-CAN 适配器**（免改 DT）。这反过来让 VPU 硬编的权限 bug 解释更干净：编码插件要探测的正是这个 VPU 节点。
+
+### 12.8 一个事故：并发重活把板子"压死"28 分钟
+
+第二轮为了图快，把 **3 个 LLM 下载 + 14 个视觉模型加载 + RAG** 并发跑。结果：
+
+- 16 核被压到 **load average ≈ 108**（`12.3 / 89.8 / 108.6`）；
+- 反向隧道 / 心跳 / sshd **全被饿死**：门户心跳停摆 28 分钟、SSH 能建连但**不响应**（111 上能看到板子侧 TCP 发送队列积压 3128B 未 ACK）；
+- **不是 OOM**（内存始终有 ~10Gi 可用，dmesg 无 OOM 记录）；负载回落后**自愈，未重启**（uptime 连续）。
+
+**教训**：板上重活**必须串行**，尤其别在下载模型的同时加载 / 推理。判断板子"死没死"最快的办法是看门户心跳（`/api/status`）和隧道 TCP 的 `send-q`。
+
+### 12.9 第二轮新增脚本
+
+| 脚本 | 作用 |
+|---|---|
+| `scripts/vision-zoo.sh` | 视觉模型全家桶 benchmark |
+| `scripts/rag.py` | embed → 余弦 → rerank → LLM 的本地 RAG |
+| `scripts/tts-voices.sh` | TTS 音色 / 语速验证（含 md5 比对） |
+| `scripts/asr-length.sh` | ASR 长度-吞吐曲线 |
