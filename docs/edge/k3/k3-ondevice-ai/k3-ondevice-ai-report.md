@@ -806,3 +806,18 @@ Mage-VL **一次只能吃一张图**，于是给了两种模式：
 | `scripts/live-voice.py` | VAD 门控实时语音（`--file` 可无麦验证） | 🚧 待跑 |
 | `scripts/camera-capture.sh` | 摄像头探测（排除 VPU 节点）+ 抓帧 | 🚧 待跑 |
 | `spacemit-issues.md` | 6 个厂方 issue 草稿 | ✅ 可提交 |
+
+### 14.6 两件安全待办：为什么这轮没做完
+
+| 事项 | 状态 | 卡点 |
+|---|---|---|
+| **轮换 Xray UUID** | ⛔ 未执行 | UUID 涉及**服务端 VPS（`43.155.179.179`）** 与**板子** `/etc/xray-k3/00-config.json` 两处；111 上没有该 VPS 的凭据且 `443` 不可达，板子也失联。**单改一侧会立刻断掉板子的 `127.0.0.1:10808`**（GitHub/模型下载都靠它）。 |
+| **吊销 GitHub PAT** | ⛔ 未执行 | fine-grained PAT 没有公开吊销 API，只能在 GitHub 后台 Revoke；且**本轮之后还要再推一次**（补 §14.1–14.3 的板上实测数字），现在删 `/root/.github-token` 就推不了了。 |
+
+已准备好的东西：
+- 零停机轮换 runbook：[`deploy/k3/xray/ROTATE-UUID.md`](../../deploy/k3/xray/ROTATE-UUID.md)
+  （服务端"先加后删"→ 更新板子 → 验证 → 删旧 UUID）；
+- 111 上的 token 只存在 `/root/.github-token`（`600`），**无其它副本**（已扫 `/root`、`/tmp`，
+  无 `.git-credentials`、无 shell history 残留）。
+
+→ 建议顺序：**隧道恢复 → 补完本轮板上实测并推送 → 删 `/root/.github-token` 并在 GitHub 后台 Revoke → 轮换 Xray UUID**。
