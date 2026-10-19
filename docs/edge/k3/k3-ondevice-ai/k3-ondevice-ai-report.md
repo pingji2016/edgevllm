@@ -20,6 +20,7 @@
 | 7 | **本地 RAG（embed+rerank+LLM）** | ✅ 跑通 | 40 块知识库全离线问答；但 **rerank ≈11s/篇**，向量检索只要 8ms（见 §12.3） |
 | 8 | **模型动物园 / TTS / VAD** | ✅ 有结论 | qwen3-0.6b **13.9 t/s**；VAD **34× 实时**；顺带测出 **TTS 音色/语速 bug** 与 **ASR 长音频劣化**（见 §12.4–12.6） |
 | 9 | **长音频转写 / 真·流式语音** | ✅ 跑通 | VAD 切段转写**快 9×**；流式 TTS 按句 **0.5s** 出声；LLM→TTS 流式**首音频 3.03s vs 非流式 28.4s**（见 §13） |
+| 10 | **码率控制 / 视频理解 / 实时语音 / 厂方 issue** | 🚧 代码完成 | `mpp_enc.c` 原生编码（CBR/VBR/CVBR/FIXQP）、`vlm-video.sh`、`live-voice.py`、`camera-capture.sh`、6 个 issue 草稿（见 §14）；**板上实测待隧道恢复** |
 
 一句话：**板子上的端侧 AI 栈（官方 AI Gateway + MPP 硬编 + A100 核）全部可用，且已实测定位了三个坑**：A100 的定位、VPU 编码权限、以及网关 LLM 的性能上限。
 
@@ -445,7 +446,7 @@ preprocess_ms 15.05 · model_infer_ms 14.81 · postprocess_ms 0.08 · infer_ms 2
 
 ## 11. 遗留问题 / 下一步
 
-1. **`-b:v` 未映射到 MPP 码率控制** —— 硬编码率不可调。需要写 MPP 原生程序（`VENC_CreateChn` + `VencChnAttr.eRcMode`）或找 ffmpeg stcodec 的正确旋钮。头文件已摸清（`/usr/include/venc/venc_api.h` + `sys/vb_api.h`），下一步可写 `mpp_enc.c`。
+1. **`-b:v` 未映射到 MPP 码率控制** —— 已写 `scripts/mpp_enc.c`（直接设 `VencChnAttr.eRcMode/u32Bitrate`）+ `mpp-enc-bench.sh` 验证脚本；**待板上编译/实测**（见 §14.1）。
 2. **实时语音**需要一只麦克风（最简单：USB 麦）。
 3. **30B-A3B** 需要离线拷入或换 32G 内存版。
 4. 把「A100 反优化」「VPU 权限 bug」「perftest `-e spacemit` 报错」「`/v1/asr/stream` 号称流式却不增量」整理成给 SpaceMiT 的 issue。
@@ -454,6 +455,7 @@ preprocess_ms 15.05 · model_infer_ms 14.81 · postprocess_ms 0.08 · infer_ms 2
 7. **ASR 长音频吞吐非线性劣化**（40s 时 RTF 0.81，见 §12.6）—— 已落成 **VAD 切段转写工具**（`scripts/long-transcribe.py`，快 9×，见 §13.1）。
 8. **rerank 太慢**（qwen3-reranker-0.6b ≈11s/篇，见 §12.3）—— 板上 RAG 只用向量检索即可。
 9. **CAN-FD / SPI 未在设备树使能**（见 §8.5 / §12.7）—— 直连机器人总线需改 DT/内核，或上 USB-CAN 适配器。
+10. **板子反向隧道不再自动重连**（2026-10-19 09:14 起，SSH 彻底不可达；心跳仍正常，见 §14.0）—— 需现场 `sudo systemctl restart k3-tunnel`；若根因是 DNS，把 unit 里的 `__K3_SERVER__` 换成 IP。
 
 ## 12. 第二轮扩展实验：把网关的余量榨干（2026-10-16 追加）
 
@@ -680,3 +682,127 @@ append "第三句话，再见。"   → 3.59s 出声（2.29s 音频）
 | `scripts/stream-asr.py` | 流式 ASR 客户端（实测证明它是**缓冲式**） |
 | `scripts/stream-tts.py` | 流式 TTS 客户端（`--append` 才真流式） |
 | `scripts/stream-voice.py` | **真·流式语音助手**（LLM 流 → 按句 → TTS 流） |
+
+## 14. 第四轮：码率控制 / 视频理解 / 实时语音 / 厂方 issue（2026-10-19 追加）
+
+> ⚠️ **本轮有一半没能在板上跑完**：2026-10-19 09:14 板子的反向隧道（`k3-tunnel.service`）
+> 断掉且**不再重连**，SSH 彻底不可达（心跳仍在每 30s 更新 → 板子活着、网络通，是板上
+> 这个服务挂了；详见 §14.0）。所以本轮**代码与文档全部完成并入库**，但 §14.1–14.3 的
+> 实测数字**待隧道恢复后补**（会把状态从 🚧 改成 ✅）。§14.4 的 issue 清单基于前三轮的
+> 实测数据，可直接提交。
+
+### 14.0 事故：隧道断了且不自动重连（09:14 →）
+
+现象与定位过程（可复用的排查顺序）：
+
+| 检查项 | 结果 | 结论 |
+|---|---|---|
+| 门户 `/api/heartbeat` 的 `lastSeen` | 每 30s 更新 | **板子活着、出网正常** |
+| 板子 `uptime`（心跳负载里） | 429217s 连续 | **没重启** |
+| 111 上 `127.0.0.1:2222` | 先 `LISTEN`，随后 `Connection refused` | 反向隧道会话**已断** |
+| 111 sshd 近 4h 的 `Accepted publickey` | **只有本机一个 IP** | 板子**没有在重连** |
+| 111 负载 / `:22` 连接数 | 0.21 / 5 条 ESTAB | sshd 没被打满，排除 MaxStartups |
+| iptables / ufw / fail2ban | 只有 docker 的 DROP，ufw inactive | 不是被封 |
+
+→ 板上 `k3-tunnel.service` 处于"不再尝试"的状态（该 unit 已带
+`StartLimitIntervalSec=0` + `Restart=always`，所以更可能是**连接侧失败**，例如
+`__K3_SERVER__` 用域名而 DNS 失效 —— 心跳脚本直连 IP 所以没事）。
+**恢复办法（需现场/本地）**：`sudo systemctl restart k3-tunnel`；若 DNS 是根因，
+把 unit 里的 `__K3_SERVER__` 换成 **IP**。
+
+> 教训：**心跳通 ≠ 可管理**。心跳和隧道是两条独立链路，排障时要分开看：
+> 心跳活 + `ss -ltn | grep 2222` 无监听 = 板上隧道服务的问题，不要再去怀疑网络/负载。
+
+### 14.1 🚧 MPP 原生编码器 `mpp_enc.c`：把码率控制补上
+
+§5.1 定位到 ffmpeg 的 `*_stcodec` **没有把 `-b:v` 映射到 MPP 的码率控制**，所以硬编
+码率不可调。本轮直接按 `/usr/include/venc/venc_api.h` + `/usr/include/sys/vb_api.h`
+写了原生程序，关键是把这几个字段显式交给硬件：
+
+```c
+VencChnAttr attr;
+attr.eCodecType     = MPP_STREAM_CODEC_H264;
+attr.eInputPixelFormat = MPP_PIXEL_FORMAT_NV12;
+attr.eFrameBufMode  = VENC_FRAME_BUF_DMABUF_EXTERNAL;  // 用 VB 池的 dma-buf
+attr.eRcMode        = VENC_RC_MODE_CBR;                // ← FIXQP / CBR / VBR / CVBR
+attr.u32Bitrate     = 4000000;                         // ← 目标码率（bps）
+attr.u32MinQp       = 10;  attr.u32MaxQp = 45;         // ← QP 上下限
+attr.u32Gop         = 30;  attr.u32FrameRate = 30;
+```
+
+数据流是**零拷贝**的：`VB_CreatePool` 建 dma-buf 池 → `VB_GetBuffer` 取一块 →
+按 `u32PlaneStride[]` 把 NV12 两个平面写进去 → `VENC_SendFrame` →
+`VENC_GetStream` 直接拿到码流指针 → 写文件 → `VENC_ReleaseStream` → `VB_ReleaseBuffer`。
+
+配套 `mpp-enc-bench.sh` 做两件事：
+1. 同一段 NV12 扫 **1/2/4/8 Mbps** 的 CBR，输出「目标 vs 实际 Mbps vs 偏差 vs 编码帧率」；
+2. 用 ffmpeg `h264_stcodec` 分别 `-b:v 1M` 和 `-b:v 8M` 各编一次，**若两者大小基本相同，
+   就是"ffmpeg 没把码率传下去"的现场证据**。
+
+> 已验证：`cc -std=c99 -Wall -Wextra` 用按真实头文件摘录的桩头文件**零告警通过**。
+> 待板上验证：`libmpp` 实际库名、`VB_GetFrameInfo` 是否填充平面地址、EOS 刷尾是否完整。
+> 建议首次加 `--dump-info`。
+
+### 14.2 🚧 视频理解 `vlm-video.sh`：抽帧 → Mage-VL → 时间线 / 拼图
+
+板上没有摄像头（§12.7），所以用现成视频（`soccer.mp4` / `src.mp4`）做文件输入验证。
+Mage-VL **一次只能吃一张图**，于是给了两种模式：
+
+| 模式 | 做法 | 成本 |
+|---|---|---|
+| 逐帧（默认） | 均匀抽 N 帧，每帧一次推理，输出 `[时间] 描述` 时间线 | N × ~1 分钟 |
+| `--grid-only` | 把 N 帧用 `tile` 拼成 3×N 一张图，**一次**推理要整体概括 | ~1 分钟 |
+
+抽帧时间点是 `(i+0.5)*时长/N`（取每段中点，避免抽到片头黑帧）。
+`--no-vlm` 只抽帧不跑模型，用来先确认抽帧/拼图正确。
+
+> 待板上验证：Mage-VL 的实际单帧耗时、拼图模式下 4B 模型能否稳定读出"3×2 顺序"。
+
+### 14.3 🚧 实时语音 `live-voice.py` + 摄像头 `camera-capture.sh`（硬件接口就绪）
+
+**实时语音**（`live-voice.py`）的回合控制不依赖"整段录音"，而是流式门控：
+
+```
+0.4s 窗口 → POST /v1/vad/analyze 判语音
+          → 有语音就追加到当前句；连续静音 0.8s → 断句
+          → ASR → LLM 流式 → 按标点切句 → TTS 逐句 append → 逐句 ffmpeg(48k/2ch) → aplay
+```
+
+- **`--file wav` 模式**用文件按真实时间喂窗口，**没有麦克风也能完整验证门控/断句/流式回复**，
+  插上 USB 麦后 `--mic` 即可（`arecord -f S16_LE -r 16000 -c 1`）。
+- `--no-llm` 只跑 VAD+ASR；`--once` 处理一句就退出；`--no-play` 不播音。
+- ES8326 只支持 48k 立体声，所以播出前统一 `ffmpeg -ac 2 -ar 48000`（§9 的坑）。
+
+**摄像头**（`camera-capture.sh`）：自动读 `/sys/class/video4linux/*/name` + 上游设备路径，
+**把 VPU（`Linlon`/`mvx`）节点过滤掉**，只认真摄像头；没有时打印诊断（不是乱抓 `/dev/video0`）。
+`--frames N` 抓帧，`--vlm` 直接接 `vlm-announce.sh` 播报。
+
+> 硬件清单（需采购/插上）：
+> - **USB 麦克风**（免驱 UVC Audio）→ `live-voice.py --mic` 立刻可用；
+> - **USB 摄像头**（UVC）或 **MIPI-CSI OV5647/OV2735** → 枚举成 `/dev/video1+`；
+>   内核驱动与 `libvi_k3_cam_plugin.so` 已在镜像里，插上即用。
+> 没有硬件时，这两条链路的**其余部分都能用文件输入跑通**（这正是本轮的设计）。
+
+### 14.4 厂方 issue 清单（6 个，可直接提交）
+
+整理成 [`spacemit-issues.md`](spacemit-issues.md)，每个都带环境、复现命令、实测数据、根因分析、期望行为：
+
+| # | 问题 | 严重度 | 关键证据 |
+|---|---|---|---|
+| 1 | A100 核组跑通用 LLM **慢 5.8×**，无任何提示 | 严重 | pp256 8.91→1.53 t/s；A100 主频 1.8G / L2 1MB |
+| 2 | VPU 硬编在用户不在 `video` 组时 **段错误**而非权限错误 | 严重 | `h264_stcodec` segfault，加组即好 |
+| 3 | TTS 的 `voice_id` / `speed` **被静默丢弃** | 中 | 3 音色 md5 全同；speed 0.7/1.5 时长都 4.49s |
+| 4 | ASR 耗时随音频长度**近似二次增长** | 中 | 5.1s→RTF 0.150，40.2s→**0.807** |
+| 5 | `/v1/asr/stream` 号称流式却**不出增量 partial** | 中 | 37.3s 音频喂完还要 +28.6s 才出唯一结果 |
+| 6 | `onnxruntime_perf_test -e spacemit` 报 option 解析错 | 低 | `Use a '|' to separate the key and value` |
+
+### 14.5 第四轮新增文件
+
+| 文件 | 作用 | 状态 |
+|---|---|---|
+| `scripts/mpp_enc.c` | MPP 原生 H.264/H.265 编码器（CBR/VBR/CVBR/FIXQP） | 🚧 语法通过，待板上编译验证 |
+| `scripts/mpp-enc-bench.sh` | 码率扫描 + 与 ffmpeg `-b:v` 失效的对照 | 🚧 待跑 |
+| `scripts/vlm-video.sh` | 视频抽帧 → Mage-VL 时间线 / 拼图总览 | 🚧 待跑 |
+| `scripts/live-voice.py` | VAD 门控实时语音（`--file` 可无麦验证） | 🚧 待跑 |
+| `scripts/camera-capture.sh` | 摄像头探测（排除 VPU 节点）+ 抓帧 | 🚧 待跑 |
+| `spacemit-issues.md` | 6 个厂方 issue 草稿 | ✅ 可提交 |

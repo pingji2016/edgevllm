@@ -19,6 +19,12 @@
 | `stream-asr.py` | **流式 ASR 客户端**（WebSocket，实测是缓冲式、不出增量 partial） | 网关 `/v1/asr/stream`、python3 `websockets` |
 | `stream-tts.py` | **流式 TTS 客户端**：按句 `append` 才真流式（每句 ~0.5s 出声） | 网关 `/v1/tts/stream`、python3 `websockets` |
 | `stream-voice.py` | **真·流式语音助手**：LLM token 流 → 逗号切句 → TTS 逐句合成（首音频 3.0s vs 非流式 28.4s） | 网关 LLM + TTS stream、python3 `websockets` |
+| `mpp_enc.c` + `mpp-enc-bench.sh` | **MPP 原生编码 + 码率控制**（补上 ffmpeg `-b:v` 不生效的坑），并扫码率验证 | `libmpp`、`/usr/include/venc`、video 组 |
+| `vlm-video.sh` | **视频理解**：均匀抽帧 → Mage-VL 逐帧描述 / 3×N 拼图总览 | `~/mage-vl`、ffmpeg |
+| `camera-capture.sh` | **摄像头探测 + 抓帧**（自动排除 VPU 节点，接上即用） | ffmpeg、v4l2 |
+| `live-voice.py` | **VAD 门控实时语音**：窗口 VAD → 断句 → ASR → 流式 LLM → 逐句 TTS 播出（`--file` 可无麦验证） | 网关全链路、arecord/aplay、`websockets` |
+
+> 厂方问题清单：[`../spacemit-issues.md`](../spacemit-issues.md)（6 个可直接提交的 issue 草稿）
 
 ## 快速上手
 
@@ -65,6 +71,22 @@ python3 stream-tts.py "一整段文本" out.wav            # 一次性 start：�
 
 # 真·流式语音助手（LLM 流 → 按句 TTS）
 python3 stream-voice.py "K3 板子能做哪些端侧 AI？" out.wav
+
+# MPP 原生编码 + 码率扫描（证明码率控制生效）
+./mpp-enc-bench.sh ~/mage-vl/codec/src.mp4 150
+./mpp-enc-bench.sh "" 60          # 只扫码率，换目录用第三个参数
+
+# 视频理解（先 --no-vlm 看抽帧；再跑模型）
+./vlm-video.sh ~/mage-vl/codec/soccer.mp4 --frames 6
+./vlm-video.sh ~/mage-vl/codec/soccer.mp4 --grid-only
+
+# 摄像头（没有就只打印诊断）
+./camera-capture.sh --list
+./camera-capture.sh --frames 3 --vlm
+
+# 实时语音：没有麦克风就用文件模拟
+python3 live-voice.py --file ~/k3-ai/out/long2.wav --no-play
+python3 live-voice.py --mic
 ```
 
 ## 必读的坑
@@ -77,3 +99,5 @@ python3 stream-voice.py "K3 板子能做哪些端侧 AI？" out.wav
 6. **网关字段名不统一** → embed/rerank/llm 用 `model`，vad/tts/vision 用 `model_id`；`/v1/vision/inference` 的 `tasks` 必须是 JSON 数组字符串。
 7. **`/v1/asr/stream` 是假流式** → 不出增量 partial：37s 音频喂完还要再等 28.6s 才出唯一结果，RTF 跟整段识别一样。要低延迟只能自己 VAD 切段（`long-transcribe.py`）。
 8. **`/v1/tts/stream` 要按句 `append` 才真流式** → 一次性 `start` 整段文本只会回一个整块（等于批量）；按句 `append` 才逐句出声（每句 ~0.5s）。
+9. **`mpp_enc.c` 首次跑先加 `--dump-info`** → 不同版本 MPP 对 `VideoFrame.u32PlaneNum/stride` 的填法可能不同；库名不确定时 `ldconfig -p | grep -i mpp`。
+10. **`live-voice.py` 没有麦克风时** → 用 `--file` 喂 wav（按真实时间节流），VAD 门控/断句/流式回复的逻辑完全一致。
