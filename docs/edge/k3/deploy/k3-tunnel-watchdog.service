@@ -1,0 +1,7 @@
+[Unit]
+Description=K3 反向隧道卡死自愈（检查 Send-Q）
+Documentation=file:///opt/k3/board/TUNNEL-RECOVERY.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/k3-tunnel-watchdog.sh

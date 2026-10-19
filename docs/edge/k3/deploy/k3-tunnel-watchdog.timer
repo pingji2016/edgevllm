@@ -1,0 +1,11 @@
+[Unit]
+Description=每分钟检查 K3 反向隧道是否卡死
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=60s
+AccuracySec=10s
+Unit=k3-tunnel-watchdog.service
+
+[Install]
+WantedBy=timers.target
