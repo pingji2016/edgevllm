@@ -38,13 +38,15 @@
 
 - [docs/edge/k3/](docs/edge/k3/) —— K3 实机实测集（RISC-V）
 
-  在 **SpacemiT K3** 上真跑出来的一批记录，7 个目录 + 汇总报告：内存带宽实测与各模型
+  在 **SpacemiT K3** 上真跑出来的一批记录，十几个目录 + 汇总报告：内存带宽实测与各模型
   速度对比（[k3-report/](docs/edge/k3/k3-report/)，含 `report.html`）、**K3 没有 NPU**
   （[k3-npu/](docs/edge/k3/k3-npu/)）、ASR 选型 whisper vs sherpa-onnx 流式 zipformer
   （[k3-asr/](docs/edge/k3/k3-asr/)）及其封装成 WebSocket 服务
   （[k3-asr-service/](docs/edge/k3/k3-asr-service/)）、**绕开 ffmpeg 用 MPP C API 驱动
   VPU 硬解**（[k3-codec/](docs/edge/k3/k3-codec/)）、Mage-VL 4B 在板上图片问答到视频链路
-  （[mage-vl-on-k3/](docs/edge/k3/mage-vl-on-k3/)、[k3-labs/](docs/edge/k3/k3-labs/)）。
+  （[mage-vl-on-k3/](docs/edge/k3/mage-vl-on-k3/)、[k3-labs/](docs/edge/k3/k3-labs/)）、
+  MNN 跑 LLM 的两条构建路线 **标准 RVV 5.6 tok/s vs K3 IME2 226 tok/s**
+  （[k3-mnn-rvv/](docs/edge/k3/k3-mnn-rvv/)）。
   从 [README](docs/edge/k3/README.md) 开始。
 
 - [docs/whisperlive/](docs/whisperlive/) —— WhisperLive 源码精读（流式语音转写）

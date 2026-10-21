@@ -21,6 +21,7 @@
 | [k3-codec/](k3-codec/) | 视频编解码：ffmpeg 硬解挂死的原因与**绕开 ffmpeg 直接用 SpacemiT MPP C API 驱动 VPU** 的做法 |
 | [k3-labs/](k3-labs/) | 两份早期实验记录：软/硬编解码对比（其「VPU 不可用」的结论已被 k3-codec 推翻）、Mage-VL 视频链路跑通 |
 | [mage-vl-on-k3/](mage-vl-on-k3/) | Mage-VL 4B（Mage-ViT + Qwen3-4B）在板上做图片问答的实跑记录 |
+| [k3-mnn-rvv/](k3-mnn-rvv/) | MNN 跑 LLM 的两条构建路线：**标准 RVV 5 tok/s vs K3 IME2 226 tok/s**，含 IME2 必须补的 march、5 tok/s 的根因链与上游 RVV PR 复盘 |
 
 ## 一句话结论
 
@@ -31,6 +32,7 @@
 | 有 NPU 吗 | 没有独立 NPU。AI 算力在 CPU 内（RVV 向量 + IME 矩阵扩展） |
 | 有 VPU 吗 | 有（H.264/H.265），但 ffmpeg 路径会挂死；绕开 ffmpeg 直接用 MPP 可跑通硬解 |
 | 语音怎么落 | sherpa-onnx 流式 zipformer（int8）RTF 0.49 ≈ 2× 实时；whisper 只适合离线 |
+| MNN 跑 0.6B LLM 要开什么 | **必须开 IME2**（`-DMNN_RVV_SPACEMIT_IME2=ON`）：pp512 226 / tg128 30 tok/s；只开标准 RVV 会静默回退标量，只有 5.6 / 5.0 |
 
 各条结论的原始数据、复现命令和失败路径都在对应目录里，报告表格以
 [k3-report/report.html](k3-report/report.html) 为准。
