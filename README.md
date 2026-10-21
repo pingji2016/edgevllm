@@ -46,7 +46,7 @@
   VPU 硬解**（[k3-codec/](docs/edge/k3/k3-codec/)）、Mage-VL 4B 在板上图片问答到视频链路
   （[mage-vl-on-k3/](docs/edge/k3/mage-vl-on-k3/)、[k3-labs/](docs/edge/k3/k3-labs/)）、
   MNN 跑 LLM 的两条构建路线 **标准 RVV 5.6 tok/s vs K3 IME2 226 tok/s**
-  （[k3-mnn-rvv/](docs/edge/k3/k3-mnn-rvv/)）。
+  （[k3-mnn-rvv/](docs/edge/k3/k3-mnn-rvv/)），附[给 MNN 上游的贡献路线](docs/edge/k3/k3-mnn-rvv/上游贡献路线.md)。
   从 [README](docs/edge/k3/README.md) 开始。
 
 - [docs/whisperlive/](docs/whisperlive/) —— WhisperLive 源码精读（流式语音转写）
