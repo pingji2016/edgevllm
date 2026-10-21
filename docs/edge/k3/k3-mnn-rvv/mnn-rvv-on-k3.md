@@ -1,32 +1,46 @@
-# MNN 在 K3 上跑 LLM：标准 RVV 5 tok/s vs IME2 226 tok/s
+# MNN 在 K3 上跑 LLM：标准 RVV 从 5 补到 40 tok/s，以及和官方数字的对账
 
 > 2026-10-21 · `pingji-k3`（SpacemiT X100）· Bianbu · gcc 15.2.0 · cmake 4.2.3
-> MNN master `d662ce36` · 模型 `Qwen3-0.6B-MNN`
+> MNN master `d662ce36` · 模型 `Qwen3-0.6B-MNN` / `Qwen3-0.6B-MNN-W4B64`
 
 把 MNN（阿里开源推理引擎）拉到板子上编了两版——**标准 RVV** 和 **SpaceMiT K3 IME2**——跑同一套
-`llm_bench`，顺手把 2026 年 4 月以来上游那一批 RISC-V PR 复盘了一遍。
+`llm_bench`，顺手把 2026 年 4 月以来上游那一批 RISC-V PR 复盘了一遍；最后把标准 RVV 缺的
+**W4 量化 GEMM** 自己写了，并把官方 381 / 54.5 的口径复现出来。
 
-**主要结论**：在 K3 上跑量化 LLM，**必须开 `MNN_RVV_SPACEMIT_IME2`**。只开 `MNN_USE_RVV` 不会报错、
-测试也全过，但主算子会静默回退到标量实现，速度差 **40 倍**。
+**三条结论**：
+
+1. 在 K3 上开箱跑 MNN 的量化 LLM，**必须开 `MNN_RVV_SPACEMIT_IME2`**。只开 `MNN_USE_RVV` 不会报错、
+   测试也全过，但主算子静默回退标量，速度差 40 倍。
+2. 标准 RVV 缺的 W4 GEMM 补上后，同一块板从 **5.65 / 4.07** 提升到 **40.07 / 25.89**
+   （7.1× / 6.4×），实现与单测见 [rvv-w4-gemm.md](rvv-w4-gemm.md)。
+3. 官方 **381.24 / 54.49** 的对账：decode 复现到 **94%**，主因是**权重规格不同**（手上的
+   429.9 MiB vs 官方口径 320.16 MiB）；prefill 只到 76%，剩余差距见 §4.4。
 
 ---
 
 ## TL;DR
 
-| 构建 | pp512 | tg128 | 相对标准 RVV |
-| --- | ---: | ---: | ---: |
-| 标准 RVV（`-DMNN_USE_RVV=ON`） | 5.62 ± 0.01 | 4.97 ± 0.02 | 1× |
-| **+ IME2（`-DMNN_RVV_SPACEMIT_IME2=ON`）** | **225.88 ± 0.40** | **30.40 ± 0.98** | **40.2× / 6.1×** |
+| 构建 / 模型 | pp512 | tg128 | 口径 |
+| --- | ---: | ---: | --- |
+| 标准 RVV（原样），ModelScope 429.9 MiB | 5.62 ± 0.01 | 4.97 ± 0.02 | 早期 |
+| IME2，ModelScope 429.9 MiB | 225.88 ± 0.40 | 30.40 ± 0.98 | 早期 |
+| RVV W4 GEMM，ModelScope 429.9 MiB | 38.70 | 21.87 | 官方 |
+| **RVV W4 GEMM，官方规格 320.16 MiB** | **40.07** | **25.89** | 官方 |
+| IME2，官方规格 320.16 MiB | 289.62 | **51.21** | 官方 |
+| 官方文档 `docs/perf/riscv_k3_ime2_asymmetric_w4b64.md` | 381.24 | 54.49 | 官方 |
 
-模型 `Qwen3-0.6B-MNN`（W4 块量化），8 线程，pp512 / tg128。
+- 早期口径：`-p 512 -n 128 -rep 2`，单进程。
+- 官方口径：pp512 `-p 512 -n 0 -rep 5 -t 8 -load false -fa 1 -kv false`；tg128
+  `-p 1 -n 128 -rep 5 -t 8 -load false -fa 0 -kv true`；3 进程 × 5 次取均值。
+- 跨口径不比绝对值。
 
 | 问题 | 结论 |
 | --- | --- |
-| 标准 RVV 为什么这么慢 | **RVV 目录里只有 FP32 的 GEMM**；LLM 低内存模式用的"W4 块量化 + 边算边反量化"GEMV/GEMM **没有 RVV 实现**，回退标量 C++ |
+| 标准 RVV 为什么这么慢 | **RVV 目录里只有 FP32 的 GEMM**；LLM 低内存模式用的「W4 块量化 + 边算边反量化」GEMM **没有 RVV 实现**，回退标量 C++（本次已补，见 [rvv-w4-gemm.md](rvv-w4-gemm.md)） |
 | 是不是 runtime gate 把 RVV 关了 | 不是。`riscv_hwprobe(2)` 实测 `key=4 → 0x38dbff9ffff00ff`，bit2(V)=1 |
 | IME2 能直接编吗 | **不能**，CMake 给的 march 少了 `zfh` / `zihintpause`，需手动补（见 §3.2） |
 | 该开 KV 量化吗（`-qa`） | **不要**。`-qa 1` pp 222→142，`-qa 2` 降到 111，纯负优化 |
-| 能对上官方 381 / 54.5 吗 | 拿到的是 0.59× / 0.56×，差距原因见 §4.4（**假设，未验证**） |
+| 能对上官方 381 / 54.5 吗 | decode 复现 **94%**（51.21），prefill 只有 **76%**（289.62）；主因是权重规格，剩余差距见 §4.4 |
 
 ---
 
@@ -186,28 +200,60 @@ Convolution 占 prefill 的比例：**98.6% → 22%**。IME2 之后 decode 的�
 > 结论：**5 tok/s 不是编译错误，而是标准 RVV 路径缺少量化 GEMM 内核，主算子静默回退标量 C++。**
 > 这种情况下测试照样全过、日志一句警告都没有 —— 只看单测结果会被骗过去。
 
-### 4.4 和官方 381 / 54.5 的差距：三条已查证，一条仍未验证
+### 4.4 官方 381 / 54.5 的对账：模型规格是主因（已定稿）
 
-我们拿到 221~227 / 30~31，约为官方文档（`docs/perf/riscv_k3_ime2_asymmetric_w4b64.md`）的 0.58~0.60×。
-原来列的三个假设，2026-10-21 又上板验证了一轮：
+上一版这里留了一条「假设，未验证」：官方数字可能来自 4bit / block 64 / `sym:false` 的权重，
+而模型库上那份 `Qwen3-0.6B-MNN` 是 5.77 bit/参数。现已按官方规格自己导出并上板复测，结论定稿。
 
-| 假设 | 结论 | 实测依据 |
-| --- | --- | --- |
-| 向量宽度不同（官方写"1024-bit"） | **不适用**。本板确实有 1024-bit 的核，但那是 A100，而 MNN 在 A100 上比 X100 **慢约 4 倍** | A100 实测 `VLEN=1024`；p8/tg2 → **10.75 / 7.42**（X100 同负载 42.17 / 32.64）；p128 那轮 7 分钟没出结果 |
-| 统计口径不同 | 不足以解释 1.7×，重复次数只影响小数位 | `-rep 2` 与 `-rep 3` 差 < 2% |
-| 核组不同 | 同上，A100 是反向的 | 见上一行 |
-| **模型规格不同** | **最可能的主因（待验证）** | 官方口径 4bit / block 64 / `sym:false` / fp16 scale ≈ **4.25 bit ≈ 302 MiB**；ModelScope 上这份权重 **429.9 MiB / 596 M 参数 = 6.05 bit/参数** |
+原先查证过的三条仍然成立，不再展开：**统计口径**（`-rep 2` vs `-rep 3` 差 < 2%）、
+**核组**（A100 在通用 LLM 上比 X100 慢 4~5.8 倍，p8/tg2 → 10.75 / 7.42，不可能是 381 的来源）、
+**调参**（`-t 8`、`-dyo 8~16` 的天花板就在 ~230 / 31，见 §4.5）。
 
-为什么模型规格能解释一大半：decode 是纯带宽活。按 429.9 MiB/token 算，
-31.23 tok/s × 429.9 MiB ≈ **13.2 GB/s**，已经是本板实测读带宽（~20 GB/s）的 66%；
-若换成 302 MiB 的 W4B64 模型、维持同样效率，应到 **~44 tok/s**，与官方 54.49 同一量级。
-旁证：llama.cpp 在同一块板上跑 0.8B 也只有 ~29 t/s，**大家都撞在同一堵带宽墙上**。
+#### 4.4.1 权重规格差异
 
-prefill 那 1.7 倍另有来源（block-scale IME2 指令路径、官方 `-n 0` 的纯 prefill 口径），**这部分仍未验证**。
+| 模型 | 权重文件 | 位宽折算 | 来源 |
+| --- | ---: | ---: | --- |
+| `Qwen3-0.6B-MNN`（ModelScope） | 450,810,338 B = 429.93 MiB | 5.77 bit/参数 | 来源不明，无导出参数记录 |
+| `Qwen3-0.6B-MNN-W4B64`（自建） | 335,712,498 B = 320.16 MiB | 4.30 bit/参数 | 4bit + block64 + 非对称 + FP16 scale + HQQ |
 
-A100 核组**不是**提 decode 的路子：仓库里 [k3-ondevice-ai](../k3-ondevice-ai/k3-ondevice-ai.md) 已实测
-它在通用 LLM（llama.cpp Q4）上比 X100 **慢 5.8 倍**（L2 1 MB vs 4 MB、主频 1.8 G vs 2.15 G），
-只适合 int8 CNN / IME 算子。
+导出配方（见 §6.1）：`--quant_bit 4 --quant_block 64 --hqq`，`--sym` 默认 `false`、
+`--scale_bit` 默认 16，与官方文档 §2.1 的「4 bit / block 64 / `sym: false` / FP16 scale」一致。
+
+#### 4.4.2 实测矩阵（官方口径，3 进程 × 5 次）
+
+| 后端 | 模型 | pp512 | tg128 |
+| --- | --- | ---: | ---: |
+| 官方文档 | W4B64 | **381.24** | **54.49** |
+| IME2 | 320.16 MiB（官方规格） | **289.62**（76%） | **51.21**（**94%**） |
+| IME2 | 429.93 MiB | 214.97 | 30.82 |
+| RVV W4 GEMM | 320.16 MiB | 40.07 | 25.89 |
+| RVV W4 GEMM | 429.93 MiB | 38.70 | 21.87 |
+| 标量 C++ | 320.16 MiB | 5.65 | 4.07 |
+
+**decode：94% 复现。** 只换模型，IME2 从 30.82 到 51.21（+66%）。带宽核算也对得上：
+51.21 tok/s × 320.16 MiB ≈ **16.8 GB/s**，是板上实测读带宽（~20 GB/s）的 84%
+——decode 到这一步是真的带宽墙，不是 kernel 的问题。
+
+剩下那 6% 与硬件状态吻合：板上 governor 是 `userspace`，A100 组锁在 **1.8 GHz**（上限 2.0 GHz，
+= 90%），且没有免密 sudo，改不了：
+
+```bash
+$ cat /sys/devices/system/cpu/cpu8/cpufreq/scaling_governor   # userspace
+$ cat /sys/devices/system/cpu/cpu8/cpufreq/scaling_cur_freq   # 1800000
+$ cat /sys/devices/system/cpu/cpu8/cpufreq/cpuinfo_max_freq   # 2000000
+```
+
+**prefill：只有 76%，这条没闭合。** prefill 计算受限，不能用模型规格解释；频率修正
+（×1.11 ≈ 321 tok/s）后仍差约 16%。可能是板级热/内存配置差异，或文档数字来自更新的 kernel
+revision——手上没有证据，不猜。
+
+#### 4.4.3 结论对照
+
+| 早先的判断 | 现在 |
+| --- | --- |
+| 官方数字来自不同的量化规格 | **成立**（decode 侧），误差量级与带宽核算都对得上 |
+| 模型规格能解释 prefill 差距 | **不成立**，prefill 仍差 24%（频率修正后 ~16%），来源待查 |
+| 标准 RVV 慢是 kernel 缺失 | **成立**：W4 GEMM 确实没有，补上后 7.1× / 6.4×；补完仍只有 IME2 的 50%（decode）/ 14%（prefill），这是 ISA 决定的 |
 
 ### 4.5 调优试探（IME2 构建，`-rep 2`）
 
@@ -227,7 +273,7 @@ A100 核组**不是**提 decode 的路子：仓库里 [k3-ondevice-ai](../k3-ond
 
 线程数与 `-dyo` 都扫过了：`-t 8` 已经是最优（`-t 6` 掉 10%、`-t 4` 掉 35%），
 `-dyo 8~16` 只给 prefill 多 1~6%，decode 不动。**这套组合的天花板就在 ~230 / 31**，
-再往上只能靠换模型规格（§4.4）或新内核（见[上游贡献路线](上游贡献路线.md)）。
+再往上只能靠换模型规格（§4.4，已实测 decode +66%）或补新内核（RVV 的 W4 GEMM 已补，见 [rvv-w4-gemm.md](rvv-w4-gemm.md)）。
 
 ---
 
@@ -258,6 +304,21 @@ A100 核组**不是**提 decode 的路子：仓库里 [k3-ondevice-ai](../k3-ond
 下载踩坑记录：ModelScope 的 `api/v1/models/.../repo?FilePath=` 对 LFS 文件返回的是配置文件内容而不是文件本身；
 **`hf-mirror.com/taobao-mnn/Qwen3-0.6B-MNN/resolve/main/<file>` 可直连**，450 MB 约 18 秒下完。
 
+### 6.1 官方规格模型的导出（要复现官方数字必须自己导）
+
+模型库上那份 `Qwen3-0.6B-MNN`（429.93 MiB）不是官方 benchmark 的规格。4bit / block 64 / 非对称
+要自己导，Mac 上跑（需要 torch + MNN python 包）：
+
+```bash
+python transformers/llm/export/llmexport.py \
+  --path Qwen3-0.6B --export mnn \
+  --quant_bit 4 --quant_block 64 --hqq \
+  --dst_path Qwen3-0.6B-MNN-W4B64
+# llm.mnn.weight = 335,712,498 B = 320.16 MiB（4.30 bit/参数）
+```
+
+同一后端只换这个模型：IME2 decode 30.82 → **51.21**；RVV W4 GEMM 21.87 → **25.89**（§4.4）。
+
 ---
 
 ## 7. 复现
@@ -287,14 +348,19 @@ bash docs/edge/k3/k3-mnn-rvv/scripts/build-and-bench.sh all
 
 ## 8. 结论与建议
 
-1. **在 K3 上跑 MNN 的量化 LLM，必须开 `MNN_RVV_SPACEMIT_IME2=ON`**，否则主算子回退标量，
-   而且**不会报错**——只能靠 benchmark 发现。
-2. **IME2 构建要补 march**（`zfh` + `zihintpause`），见 §3.2；这是上游 CMake 的问题，建议提 issue。
-3. **标准 RVV 并非没用**：FP32 路径（`MNNPackedMatMulFP32`）和 CNN/图像类算子（C4 sampler、
-   depthwise、resize、颜色转换）都有 RVV 实现；本次 RVV/图像测试全过。它缺的是**量化 GEMM**。
-4. **KV 量化（`-qa`）先别开**，等更宽向量或更小 batch 再试。
-5. 想看 MNN 在这块板上的上限，下一步值得试：`MNN_RVV_FAST_MATH=ON`、更大的模型（1.7B）看
-   prefill/decode 的 scale 表现、以及把 `nproc` 之外的 X100 核调度策略再调一调。
+1. **在 K3 上跑 MNN 的量化 LLM，开箱只有两条路**：开 `MNN_RVV_SPACEMIT_IME2`（厂商矩阵单元，
+   decode 到官方 94%），或者自己补 RVV 的量化 GEMM（本次 40.07 / 25.89，7.1× / 6.4×，
+   见 [rvv-w4-gemm.md](rvv-w4-gemm.md)）。只开 `MNN_USE_RVV` 会静默回退标量，且不报错。
+2. **复现官方数字之前先对模型规格**：429.93 MiB 的权重只能到官方 decode 的 56%，换成
+   4bit/block64/HQQ 自导出（320.16 MiB）就是 94%。这一步比任何 kernel 优化都便宜。
+3. **IME2 构建要补 march**（`zfh` + `zihintpause`），见 §3.2；这是上游 CMake 的问题，建议提 issue。
+4. **标准 RVV 并非没用**：FP32 路径（`MNNPackedMatMulFP32`）和 CNN/图像类算子（C4 sampler、
+   depthwise、resize、颜色转换）都有 RVV 实现，本次 `backend/cpu` 回归 5 passed / 0 failed。
+   它缺的是量化 GEMM，现在补上了。
+5. **KV 量化（`-qa`）先别开**，量化/反量化开销超过省下的带宽。
+6. **不要为了 decode 上 A100 核组**：通用 LLM 上比 X100 慢 4~5.8 倍，只适合 int8 CNN / IME 算子。
+7. 还没闭合的：官方 prefill 381 只复现到 76%（289.62），频率修正后仍差 ~16%，
+   需要更新的 kernel revision 或不同的板级配置才能解释。
 
 ---
 

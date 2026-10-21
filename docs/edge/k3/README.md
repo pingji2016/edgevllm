@@ -21,7 +21,7 @@
 | [k3-codec/](k3-codec/) | 视频编解码：ffmpeg 硬解挂死的原因与**绕开 ffmpeg 直接用 SpacemiT MPP C API 驱动 VPU** 的做法 |
 | [k3-labs/](k3-labs/) | 两份早期实验记录：软/硬编解码对比（其「VPU 不可用」的结论已被 k3-codec 推翻）、Mage-VL 视频链路跑通 |
 | [mage-vl-on-k3/](mage-vl-on-k3/) | Mage-VL 4B（Mage-ViT + Qwen3-4B）在板上做图片问答的实跑记录 |
-| [k3-mnn-rvv/](k3-mnn-rvv/) | MNN 跑 LLM 的两条构建路线：**标准 RVV 5 tok/s vs K3 IME2 226 tok/s**，含 IME2 必须补的 march、5 tok/s 的根因链、A100/调参补测，以及[上游贡献路线](k3-mnn-rvv/上游贡献路线.md)（5 个方向 + 查重结果） |
+| [k3-mnn-rvv/](k3-mnn-rvv/) | MNN 跑 LLM：**标准 RVV 从 5 补到 40 tok/s**（自写 W4 GEMM）、IME2 复现官方 decode 的 94%，含 IME2 必须补的 march、5 tok/s 的根因链、官方 381/54.5 的对账（模型规格是主因），以及[上游贡献路线](k3-mnn-rvv/上游贡献路线.md)（5 个方向 + 查重结果） |
 
 ## 一句话结论
 
