@@ -2,7 +2,7 @@
 
 > 2026-10-21 · `pingji-k3`（SpacemiT X100，VLEN=256）· MNN master `d662ce36` · gcc 15.2.0
 > 模型 `Qwen3-0.6B-MNN-W4B64`（4bit / block 64 / 非对称 / HQQ，320.16 MiB）· 8 线程
-> 本地分支 `feature/rvv-w4-gemm`，提交 `a3bbe3e1`，3 文件 +477 行（未推送上游）
+> 本地分支 `feature/rvv-w4-gemm`，提交 `a3bbe3e1`，3 文件 +485 行（未推送上游）
 
 MNN 在 RVV 上缺一个函数：`Int8GemmKernel_W4`。ARM、x86、SpacemiT IME2 都有实现，
 只有通用 RISC-V 是空的——于是「4bit 权重 + 动态 int8 激活」的 LLM 主算子回退到标量 C++。
