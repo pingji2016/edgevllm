@@ -3,9 +3,12 @@
 把两件「看起来像魔法」的事拆开：手机摄像头前的**人脸滤镜 / 换脸**，和**实时变声**。
 
 一半是综述（各自有哪些项目、技术上到底怎么做、卡在哪里），一半是动手验证 ——
-这里写的每个数字都是在本机（Windows + Python 3.12，**全程 CPU**）上真跑出来的，
-脚本、测试素材和复现命令都在仓库里。CPU 是有意为之：手机上本来就没有独显，
-CPU 跑得动的方案，换到 GPU / NPU 上只是更快。
+这里写的每个数字都是真跑出来的，脚本、测试素材和复现命令都在仓库里。
+
+01–05 在本机（Windows + Python 3.12，**全程 CPU**）上跑。CPU 是有意为之：
+手机上本来就没有独显，CPU 跑得动的方案，换到 GPU / NPU 上只是更快。
+06 换到**真机 GPU**（Pixel 6 / Mali-G78，OpenGL ES），07 换到 **RISC-V 板**
+（SpacemiT K3）——这两篇是把结论真的落地，而不是继续推算。
 
 两个领域最后会撞到同一堵墙：**都是「模型很快，周边很慢」**。
 人脸那边慢在逐像素变形，变声那边慢在分块拼接和缓冲。优化点在工程，不在模型。
@@ -19,7 +22,9 @@ CPU 跑得动的方案，换到 GPU / NPU 上只是更快。
 | [03-voice-pitch-and-formant.md](03-voice-pitch-and-formant.md) | 变声的物理基础：音高 vs 音色、相位声码器 / PSOLA / WORLD、倒谱包络怎么修 |
 | [04-voice-neural.md](04-voice-neural.md) | 神经变声：RVC 一族的架构拆解、项目横评、延迟与设备链路 |
 | [05-realtime-engineering.md](05-realtime-engineering.md) | 实时工程：延迟预算、分块与 SOLA、环形缓冲、ONNX 后端怎么选 |
-| [scripts/](scripts/) | 5 个可复现脚本 + 合成测试素材（不含任何真人照片） |
+| [06-android-glsl-filter-chain.md](06-android-glsl-filter-chain.md) | 落地（GPU）：Camera2 → SurfaceTexture(OES) → 9 个 GLSL 效果的完整 Android App，含单帧 GPU 计时、分屏对比、无 gradle 构建 |
+| [07-voice-changer-wsola.md](07-voice-changer-wsola.md) | 落地（板端）：60 行 numpy 的 WSOLA + 重采样变调器，合成信号真值校验，K3 上的实时余量 |
+| [scripts/](scripts/) | 可复现脚本 + 一个 Android 工程 + 合成测试素材（不含任何真人照片） |
 
 ## 一句话结论
 
@@ -33,12 +38,17 @@ CPU 跑得动的方案，换到 GPU / NPU 上只是更快。
 | `formant=preserved` 靠谱吗 | 升调时能保住 F1/F2，降调时基本失效；用 15 行倒谱包络移植可以把三个共振峰全拉回来（**比值 1.03/0.98/1.02**） |
 | 神经变声为什么快不起来 | 每块都要过一遍模型推理，块长越短延迟越低但固定开销摊不薄（**[块长 ↔ 延迟/RTF 表](05-realtime-engineering.md)**） |
 | 实时变声的延迟花在哪 | 块长是大头。ITU-T G.114 建议单向 < 150 ms，而 500 ms 的块光攒数据就超了 |
+| 同样的滤镜放到真机 GPU 上多快 | 2272×1080 整帧 3.8–5.0 ms（含 `glFinish` 呈现等待），磨皮只比原图多 0.7 ms —— 比 CPU 逐像素的 97.6 ms 快两个数量级（**[06](06-android-glsl-filter-chain.md)**） |
+| 变声一定要有 GPU 吗 | 不用。60 行 numpy 的 WSOLA 在 **RISC-V 单核**上有 16–46× 实时余量（16 kHz），瓶颈不在算法（**[07](07-voice-changer-wsola.md)**） |
+| 怎么验证变声对不对 | 用**已知真值**的纯音 / 锯齿波（200 Hz → 283.0 / 141.0 Hz，误差 < 0.3%）。别用语音 f0 估计器互相验证，八度错误会让两个不同的操作测出同一个数（**[负结果](07-voice-changer-wsola.md)**） |
 
 ## 素材说明
 
-- 所有图片与音频都在本机生成，**输入是程序化合成的人脸和 SAPI 合成语音**，
+- 所有图片与音频都在本机生成，**输入是程序化合成的人脸和 TTS 合成语音**，
   没有任何真人照片 / 真人录音。换脸用的是自换脸（源 = 目标），只用来验证流水线跑通。
-- 想直接听差别：[audio/](audio/) 里有 4 组对照（变调前后、自己修包络前后、分块拼接前后）。
+  06 的演示画面是 Unsplash 授权的街景图（不是人脸，见正文里的边界说明）。
+- 想直接听差别：[audio/](audio/) 里有 5 组对照（变调前后、自己修包络前后、分块拼接前后，
+  以及 07 的 WSOLA 五段对比）。
 - 复现环境与踩坑见 [scripts/README.md](scripts/README.md)。
 
 ## 许可提醒（重要）

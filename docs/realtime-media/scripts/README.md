@@ -3,6 +3,13 @@
 这 5 个脚本对应正文里的每一张实测表。它们都是**独立可跑**的：不依赖任何仓库外的代码，
 只需要 ffmpeg（带 librubberband）和几个 pip 包。
 
+06 / 07 是后来补的两个落地实验，环境完全不同，单独列在下面：
+
+| 篇目 | 需要什么 |
+| --- | --- |
+| [06](../06-android-glsl-filter-chain.md) | Android SDK（build-tools 35 + platform android-35）+ JDK + 一台真机；纯 Java，无 gradle |
+| [07](../07-voice-changer-wsola.md) | 只有 `numpy`。板端实测是 SpacemiT K3（RISC-V / Python 3.14.4 / numpy 2.3.5），PC 上同样能跑，只会更快 |
+
 ## 环境
 
 本机实测环境（数字都出自这里）：
@@ -59,6 +66,9 @@ https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/
 | [dsp_formant_synthetic.py](dsp_formant_synthetic.py) | 合成元音 + LPC 真值校验 + 倒谱包络移植 | [03-voice-pitch-and-formant.md](../03-voice-pitch-and-formant.md) |
 | [dsp_pitch_formant.py](dsp_pitch_formant.py) | 真实语音上量 F0 比与包络搬移量 α | [03-voice-pitch-and-formant.md](../03-voice-pitch-and-formant.md) |
 | [realtime_chunking.py](realtime_chunking.py) | 分块拼接的伪影 + 块长 ↔ 延迟/RTF | [05-realtime-engineering.md](../05-realtime-engineering.md) |
+| [voice_changer_wsola.py](voice_changer_wsola.py) | 60 行 WSOLA + 线性重采样变调器（pitch / tempo / resample 三模式） | [07-voice-changer-wsola.md](../07-voice-changer-wsola.md) |
+| [f0_check.py](f0_check.py) | 基频检查（自相关 + 中位数），**只对纯音 / 锯齿波可信** | [07-voice-changer-wsola.md](../07-voice-changer-wsola.md) |
+| [android-glfilter/](android-glfilter/) | 真机 GLSL 滤镜链（Android App，无 gradle，2 个 Java 文件） | [06-android-glsl-filter-chain.md](../06-android-glsl-filter-chain.md) |
 
 ## 运行
 
@@ -77,7 +87,18 @@ python dsp_pitch_formant.py speech_zh.wav out_var/
 
 # 分块：接缝伪影 + 块长 ↔ 延迟/RTF
 python realtime_chunking.py speech_zh.wav out_chunk/
+
+# 变调：WSOLA + 重采样（只依赖 numpy）
+python voice_changer_wsola.py speech_zh.wav out_p6.wav  --mode pitch --semi 6
+python voice_changer_wsola.py speech_zh.wav out_m6.wav  --mode pitch --semi -6
+python voice_changer_wsola.py speech_zh.wav out_t125.wav --mode tempo --speed 1.25
+python voice_changer_wsola.py speech_zh.wav out_r125.wav --mode resample --speed 1.25  # 快放，不是变声
+
+# 验证：先用已知频率的合成信号，别拿语音验
+python f0_check.py sine200.wav sine_p6.wav        # 200 -> 283.0 Hz
 ```
+
+Android 工程的编译见 [android-glfilter/README.md](android-glfilter/README.md)。
 
 ## 本机踩到的坑
 

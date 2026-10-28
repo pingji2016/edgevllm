@@ -69,8 +69,11 @@
   到底保住了什么，含合成元音真值校验）、
   [04](docs/realtime-media/04-voice-neural.md) 神经变声（RVC 一族、延迟与设备链路）、
   [05](docs/realtime-media/05-realtime-engineering.md) 实时工程（延迟预算、分块伪影、
-  无锁缓冲）。所有实验器材都是**程序化合成**的人脸与 TTS 语音，不含真人素材；
-  脚本与复现命令见 [scripts/](docs/realtime-media/scripts/)。
+  无锁缓冲）、[06](docs/realtime-media/06-android-glsl-filter-chain.md) 真机上把滤镜链跑起来
+  （Camera2 → OES → GLSL，2272×1080 单帧 3.8–5.0 ms）、
+  [07](docs/realtime-media/07-voice-changer-wsola.md) 自己写一个变调器
+  （60 行 WSOLA + 重采样，K3 上 16×–46× 实时）。所有实验器材都是**程序化合成**的人脸与
+  TTS 语音，不含真人素材；脚本与复现命令见 [scripts/](docs/realtime-media/scripts/)。
 
 ## 示例
 
