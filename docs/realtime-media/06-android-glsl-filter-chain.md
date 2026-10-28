@@ -161,7 +161,7 @@ zipalign -f -p 4 build/base.apk build/aligned.apk
 apksigner sign --ks debug.jks --out build/app.apk build/aligned.apk
 ```
 
-完整脚本见 [scripts/android-glfilter/build.sh](../scripts/android-glfilter/build.sh)，产物约 4.2 MB，其中 4.1 MB 是演示视频（`assets/demo.mp4`），代码和资源不到 100 KB。
+完整脚本见 [scripts/android-glfilter/build.sh](scripts/android-glfilter/build.sh)，产物约 4.2 MB，其中 4.1 MB 是演示视频（`assets/demo.mp4`），代码和资源不到 100 KB。
 
 ## 七、踩到的坑
 

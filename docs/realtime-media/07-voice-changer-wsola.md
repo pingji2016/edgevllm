@@ -53,7 +53,7 @@ pos  = lo + int(np.argmax(corr))
 这句话的意思是「找一段波形，让它的开头和你本来要接的地方最相似」，于是重叠区同相叠加，
 接缝就听不出来了。代价是每帧一次互相关：`O(FRAME · (2·TOL + FRAME))`。
 
-完整实现（[scripts/voice_changer_wsola.py](../scripts/voice_changer_wsola.py)）：
+完整实现（[scripts/voice_changer_wsola.py](scripts/voice_changer_wsola.py)）：
 
 ```python
 def wsola(x, stretch):
