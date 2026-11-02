@@ -12,6 +12,10 @@
 
 ## Issue 1（严重）A100 核组跑通用 LLM 反而慢 5.8×，且没有任何提示
 
+> 2026-11-02 补：开关的准确用法（`echo $$ > /proc/set_ai_thread` / `echo 0`、
+> 子进程继承但跨会话不继承）、X100 vs A100 的完整对照，见
+> [`../k3-hardware/a100-cores.md`](../k3-hardware/a100-cores.md)。
+
 **组件**：内核 HMP 调度（`drivers/soc/spacemit/hmp.c`、`/proc/set_ai_thread`）+ llama.cpp
 
 **摘要**：按官方方式把线程切到 A100（HMP_AI, cpu 8–15）后，llama.cpp 的
@@ -186,6 +190,52 @@ onnxruntime_perf_test -e spacemit -r 5 model.onnx
 （例如 `-e spacemit|<key>=<value>`）。
 
 ---
+
+---
+
+## Issue 7（严重）IME2 路径的 flash-attn 在「逐 token 解码」时精度错误（一行修复，上游未合）
+
+**组件**：`llama.cpp-tools-spacemit` 的 IME2 后端（`ggml/src/ggml-cpu/spacemit/rvv_kernels.cpp`）
+
+**来源**：SpaceMiT 论坛已有人完整定位并给出一行修复 ——
+[`t/1733`](https://forum.spacemit.com/t/1733)。这里补一条**版本 / 行号 / 本地对照**的证据链，
+方便厂商直接并进下一版。
+
+**受影响范围**（我们这边核实过）：
+
+| 项 | 值 |
+| --- | --- |
+| 本机安装版本 | `llama.cpp-tools-spacemit` **0.1.9**（与论坛点名的 0.0.8 / 0.1.1 / 0.1.9 一致） |
+| 本机源码树 | `~/llama-src/llama.cpp-master`，第 **669** 行仍是 `float M[QLEN] = { -INFINITY };` |
+| 实际会走的内核 | 只实例化了 `..._mrow<4>`（1262 行）和 `..._mrow<2>`（1283 行） |
+| 触发条件 | `n_ubatch = 1`（逐 token 解码）+ flash-attn 开 + 每个 KV 组 2 或 4 个 query head |
+
+**机制**：聚合初始化只把 `M[0]` 设成 `-∞`，`M[1..QLEN-1]` 是 0。
+第 2/3/4 个 head 的 online-softmax 初始最大值变成 0，注意力分数全为负时 `exp(s-0)`
+在转成 `_Float16`（V 累加器）时下溢 → 输出被缩小，生成出现 "the the"、JSON 抽错。
+
+**本地对照（2026-11-02，`pingji-k3`，Qwen3-0.6B-Q4_0，512 ctx，`-ub 1`）**：
+`-fa 0` 作基准，`-fa 1` 比 KLD：
+
+| 核簇 | KLD | top-1 一致率 |
+| --- | ---: | ---: |
+| X100（0-7） | 0.0046 | 96.5% |
+| A100（8-15） | 0.000000 | 100% |
+
+**结论**：0.6B 这个组合（16 q / 8 kv → `_mrow<2>`）**没有复现**论坛那 0.215 量级的偏差，
+说明该内核在我们的调用路径上没有被真正执行（或已被构建时的分支绕开）。
+所以**日常 0.6B / Q4_0 的调用不受影响**；但 7B 级（GQA 4/2）仍需实测。
+
+**修复（论坛给出，我们照抄一行）**：
+```diff
+-    float M[QLEN] = { -INFINITY };  // maximum KQ value
++    float M[QLEN];                  // maximum KQ value
++    std::fill(M, M + QLEN, -INFINITY);
+```
+临时规避：`-fa off`（pp512 约慢 11%）。
+
+**期望**：把这一行并进 `llama.cpp-tools-spacemit` 下一版，同时提上游
+`ggml-org/llama.cpp`（`-DGGML_CPU_RISCV64_SPACEMIT=ON` 也有同样问题）。
 
 ## 附：正向结论（一并反馈）
 
