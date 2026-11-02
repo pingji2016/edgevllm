@@ -22,6 +22,7 @@
 | [k3-labs/](k3-labs/) | 两份早期实验记录：软/硬编解码对比（其「VPU 不可用」的结论已被 k3-codec 推翻）、Mage-VL 视频链路跑通 |
 | [mage-vl-on-k3/](mage-vl-on-k3/) | Mage-VL 4B（Mage-ViT + Qwen3-4B）在板上做图片问答的实跑记录 |
 | [k3-mnn-rvv/](k3-mnn-rvv/) | MNN 跑 LLM：**标准 RVV 从 5 补到 40 tok/s**（自写 W4 GEMM）、IME2 复现官方 decode 的 94%，含 IME2 必须补的 march、5 tok/s 的根因链、官方 381/54.5 的对账（模型规格是主因），以及[上游贡献路线](k3-mnn-rvv/上游贡献路线.md)（5 个方向 + 查重结果） |
+| [k3-whitepaper.md](k3-whitepaper.md) | **官方白皮书精读**（Preview 2026-01-29）：RVA23 同构融合、X100 微架构逐项、A100/IME 1.0/2.0、1024-bit 向量、调度分区与评测数据；文末把每条说法和本仓库实测逐条对照（60 TOPS 是 INT4 稀疏峰值、A100 为什么默认不给通用负载） |
 
 ## 一句话结论
 
