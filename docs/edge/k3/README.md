@@ -61,6 +61,7 @@
 | --- | --- |
 | [k3-android/](k3-android/) | **在 K3 上跑 Android**：Cuttlefish + crosvm + KVM 跑 riscv64 AOSP guest（不是 Google 官方 AVD）。旁边带两套部署脚本：`deploy/k3/`（板子侧）与 `deploy/aosp/`（云上 x86_64 编译机） |
 | [k3-hardware/](k3-hardware/) | 这块板「能干什么、干不了什么」：内核 / GPU / VPU / NPU / 内存带宽的边界，一次钉死 |
+| └ [a100-cores.md](k3-hardware/a100-cores.md) | **A100 核组（8–15）到底能不能用**：`/proc/set_ai_thread` 怎么开、开了为什么更慢（实测 4~6×）、什么时候才值得 |
 | [k3-portal/](k3-portal/) | 怎么连进这块板子：门户与网页终端（ttyd）的协议细节，附 `k3exec.py`（一条命令远程执行） |
 | [k3-ondevice-ai/](k3-ondevice-ai/) | 端侧 AI 推理实测汇总：能跑什么、跑多快、卡在哪（硬件层面看 k3-hardware/） |
 | [k3-arm64-on-riscv/](k3-arm64-on-riscv/) | riscv64 Android 上怎么跑 arm64 应用（NativeBridge / 二进制翻译）：上游是空的，三条路线与实测过的第一步 |
