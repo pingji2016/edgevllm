@@ -14,7 +14,7 @@
 
 > 2026-11-02 补：开关的准确用法（`echo $$ > /proc/set_ai_thread` / `echo 0`、
 > 子进程继承但跨会话不继承）、X100 vs A100 的完整对照，见
-> [`../k3-hardware/a100-cores.md`](../k3-hardware/a100-cores.md)。
+> [`../k3-a100-cores.md`](../k3-hardware/a100-cores.md)。
 
 **组件**：内核 HMP 调度（`drivers/soc/spacemit/hmp.c`、`/proc/set_ai_thread`）+ llama.cpp
 
@@ -190,9 +190,6 @@ onnxruntime_perf_test -e spacemit -r 5 model.onnx
 （例如 `-e spacemit|<key>=<value>`）。
 
 ---
-
----
-
 ## Issue 7（严重）IME2 路径的 flash-attn 在「逐 token 解码」时精度错误（一行修复，上游未合）
 
 **组件**：`llama.cpp-tools-spacemit` 的 IME2 后端（`ggml/src/ggml-cpu/spacemit/rvv_kernels.cpp`）
@@ -214,17 +211,30 @@ onnxruntime_perf_test -e spacemit -r 5 model.onnx
 第 2/3/4 个 head 的 online-softmax 初始最大值变成 0，注意力分数全为负时 `exp(s-0)`
 在转成 `_Float16`（V 累加器）时下溢 → 输出被缩小，生成出现 "the the"、JSON 抽错。
 
-**本地对照（2026-11-02，`pingji-k3`，Qwen3-0.6B-Q4_0，512 ctx，`-ub 1`）**：
-`-fa 0` 作基准，`-fa 1` 比 KLD：
+**本地对照（2026-11-02 / 11-03，`pingji-k3`，512 ctx，`-b 512 -ub 1 -t 8`）**：
+`-fa 0` 作基准，`-fa 1` 与它比 KLD（同一份文本、同一颗芯片，只改 flash-attn）：
 
-| 核簇 | KLD | top-1 一致率 |
-| --- | ---: | ---: |
-| X100（0-7） | 0.0046 | 96.5% |
-| A100（8-15） | 0.000000 | 100% |
+| 模型 | q / kv（每 KV 组 query 数） | 核簇 | KLD 均值 | top-p 一致 |
+| --- | --- | --- | ---: | ---: |
+| Qwen3-0.6B Q4_0 | 16 / 8（2，`_mrow<2>`） | X100 | 0.0046 | 96.5% |
+| Qwen3-0.6B Q4_0 | 同上 | A100 | 0.000000 | 100% |
+| Qwen2.5-7B Q4_0 | 28 / 4（**7，无 `_mrow<7>`**） | X100 | **0.001464**（中位 0.000953 / 最大 0.0106） | 98.43% |
+| Qwen2.5-7B Q4_0 | 同上 | A100 | 0.000000 | 100% |
+| **Qwen3-4B Q4_K_M** | 32 / 8（**4，正好命中 `_mrow<4>`**） | X100 | **0.002029 ± 0.000248**（中位 0.000652 / 最大 0.041432） | 97.255 ± 1.025% |
+| Qwen3-4B Q4_K_M | 同上 | A100 | 0.000000 | 100% |
 
-**结论**：0.6B 这个组合（16 q / 8 kv → `_mrow<2>`）**没有复现**论坛那 0.215 量级的偏差，
-说明该内核在我们的调用路径上没有被真正执行（或已被构建时的分支绕开）。
-所以**日常 0.6B / Q4_0 的调用不受影响**；但 7B 级（GQA 4/2）仍需实测。
+4B 的基准 PPL = **14.0710 ± 3.14562**（X100，`-fa 0`，173.38 s/pass）。
+
+**结论**：三种 GQA 组合都试过了，包括**真正会实例化 `_mrow<4>` 的 4:1**
+（Qwen3-4B，X100 上 KLD 也只有 0.0020），仍然**没有复现论坛那 0.2148 量级的偏差**。
+所以问题要么不在我们这版 0.1.9 的二进制里（编译期走了别的分支），
+要么论坛那组数据来自**更早的构建 / 不同的 `-ub` 与 `-fa` 组合**。
+建议厂商给出那组 0.2148 的**完整复现命令与版本号**；无论如何，
+把 §修复 那一行并进主线仍然是必要的（代价为零）。
+
+附带一个反直觉的观察：**Qwen3-4B 在 A100 上反而快**（`-fa 0` 61.73 s/pass vs
+X100 173.38 s/pass，2.8×），而 Qwen2.5-7B 在 A100 上慢 5.8×（1688 s vs 289 s）。
+说明 IME2 路径是否命中与模型形状强相关，不能一概而论"别用 A100"。
 
 **修复（论坛给出，我们照抄一行）**：
 ```diff
@@ -236,6 +246,76 @@ onnxruntime_perf_test -e spacemit -r 5 model.onnx
 
 **期望**：把这一行并进 `llama.cpp-tools-spacemit` 下一版，同时提上游
 `ggml-org/llama.cpp`（`-DGGML_CPU_RISCV64_SPACEMIT=ON` 也有同样问题）。
+
+## Issue 8（严重）SpaceMIT EP 在「QDQ 量化模型」上 **SIGSEGV**，崩在 `SpineGraph::Build`
+
+**组件**：`spacemit_ort` EP（`libspacemit_ep.so.2.0.6`）+ ORT `1.24.2+spacemit.a1`
+
+**来源**：论坛 [t/1744](https://forum.spacemit.com/t/1744) 有人报 Depth-Anything-3 int8
+在 EP 上段错误（ORT `1.24.0+spacemit.a3`）。我们用板上**现成的** int8 模型复现，
+说明它不是某个模型的特例。
+
+**复现**（2026-11-03，`pingji-k3`，Bianbu 4.0.1）：
+
+```python
+import spacemit_ort, onnxruntime as ort
+s = ort.InferenceSession("yolo11n.q.onnx",
+        providers=['SpaceMITExecutionProvider'])   # ← 这里就崩
+```
+
+**结果**（三个不同来源的 QDQ 模型，全部在 `InferenceSession` 构造阶段崩溃）：
+
+| 模型 | 大小 | 节点数 | EP | CPU |
+| --- | ---: | ---: | --- | --- |
+| `yolo11n.q.onnx` | 2.9 MB | 975（Q/DQ 673） | **SIGSEGV (139)** | ✅ 正常输出 `(1,64,80,80)`、`(1,80,80,80)` |
+| `resnet50.q.onnx` | 25 MB | 273（Q/DQ 200） | **SIGSEGV (139)** | ✅ |
+| `yolov5n-face_cut.q.onnx` | 2.0 MB | — | **SIGSEGV (139)** | ✅ |
+
+崩溃栈（`gdb -batch -ex run -ex bt`，符号齐全）：
+
+```
+SIGSEGV in onnxruntime::spacemit::SpineNode::SpineNode(onnxruntime::Node const*)
+  #1 SpineGraph::Build(GraphViewer const&)
+  #2 SpineGraph::SpineGraph(GraphViewer const&)
+  #3 SpaceMITExecutionProvider::Compile(...)
+  #4 PartitionOnnxFormatModelImpl(...)
+  #5 GraphPartitioner::Partition(...)
+  #6 InferenceSession::TransformGraph(...)
+  #7 InferenceSession::Initialize()
+所有帧都在 libspacemit_ep.so.2.0.6 / libonnxruntime.so.1.24.2+spacemit.a1
+```
+
+**影响**：**所有 int8（QDQ）ONNX 模型都无法用 AI Core 加速**，只能退回 CPU
+（`providers=['CPUExecutionProvider']` 同一文件跑得好好的）。
+这也解释了论坛 t/1744 的现象——不是 DA3 的问题，是 EP 的 QDQ 图构建。
+
+**期望**：
+1. `SpineNode` 构造里对缺失的 optional attribute / 子图做判空，**返回 Status 而不是段错误**；
+2. 修好后请给一个最小的 QDQ conv 单测（本仓库这份 `yolo11n.q.onnx` 2.9 MB 就够）。
+3. 临时规避：int8 模型用 CPU EP；或先 `quantize` 成 `MatMulInteger`/FP16 再试。
+
+---
+
+## Issue 9（中）`onnxruntime.quantization` 模块无法导入：protobuf 描述符冲突直接 abort
+
+**组件**：`python3-onnx` 1.20.0 + ORT `1.24.2+spacemit.a1`（同一进程）
+
+```bash
+$ python3 -c "import onnxruntime.quantization"
+terminate called after throwing an instance of 'google::protobuf::FatalException'
+  what():  CHECK failed: GeneratedDatabase()->Add(encoded_file_descriptor, size):
+Aborted (core dumped)
+```
+
+- `import onnx; import onnxruntime` ✅（顺序反过来就行）
+- `import onnxruntime.quantization` **单独 import 也崩** ❌
+- `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` **无效**（崩在 ORT 自带的 C++ protobuf）
+
+**影响**：板上**无法做离线量化**（`quantize_static` / `quantize_dynamic` 全部不可用），
+而 K3 的卖点之一就是 int8；用户只能去别的机器量化好再拷过来。
+
+**期望**：统一 protobuf 版本 / 让 ORT 的 python 包用 `protobuf` 的 dynamic message，
+或至少把 `quantization` 子模块单独打包，别让它把描述符池搞崩。
 
 ## 附：正向结论（一并反馈）
 
