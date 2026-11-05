@@ -42,6 +42,20 @@ taskset -c 8-15 llama-bench -m Qwen3.5-2B-Q4_0.gguf -t 8 -p 256 -n 16
 | X100 (0–7) | **8.91** | **5.54** |
 | A100 (8–15) | 1.53 | 1.45 |
 
+> **2026-11-05 修正**：A100 慢的是标量/通用计算，**不是内存带宽**。
+> 同一块板子跑 STREAM（`N=2e7` doubles，`gcc -O3 -march=rv64gcv -fopenmp`，单位 GB/s）：
+>
+> | 核组 / 线程 | Copy | Scale | Add | Triad |
+> |---|---:|---:|---:|---:|
+> | X100 1T | 6.52 | 6.45 | 6.82 | 10.26 |
+> | X100 8T | 9.48 | 9.63 | 12.53 | 18.74 |
+> | A100 1T | 10.74 | 8.89 | 14.35 | 19.11 |
+> | A100 8T | **10.97** | **10.97** | **14.33** | **22.13** |
+>
+> A100 单线程 Copy 就比 X100 高 65%，8 线程 Triad 高 18%，与 VLEN 1024 的宽向量访问一致。
+> 所以"别用 A100"要限定在**标量/分支密集、对小缓存敏感**的负载——
+> CoreMark 4972 vs 1539 才是它的真实短板，带宽密集任务反而该用它。
+
 **根因（我们的分析）**：
 
 | | X100 | A100 |
@@ -522,6 +536,53 @@ work(a, len, 4);                    /* 已在 A100，VLEN=1024 → 栈被写坏 
 
 ---
 
+## Issue 14（中）VPU 硬编：`h264_stcodec` 静默忽略码率参数，`h264_v4l2m2m` 直接失败
+
+**组件**：MPP VENC 的 ffmpeg 封装（`h264_stcodec`、`h264_v4l2m2m`）
+
+**来源**：论坛 [t/1405](https://forum.spacemit.com/t/1405)、[t/1299](https://forum.spacemit.com/t/1299)。
+
+**现象 A：`-b:v` 完全无效**
+
+```bash
+for br in 1M 8M 20M; do
+  ffmpeg -nostdin -f lavfi -i testsrc2=size=1920x1080:rate=30 -t 3 \
+         -pix_fmt yuv420p -c:v h264_stcodec -b:v $br /tmp/o_$br.h264 -y
+done
+ls -l /tmp/o_*.h264
+```
+
+| `-b:v` | 输出大小 | 实际码率 |
+| ---: | ---: | ---: |
+| 1M | 3,263,994 B | 8.70 Mbps |
+| 8M | 3,263,994 B | 8.70 Mbps |
+| 20M | 3,263,994 B | 8.70 Mbps |
+
+三档输出**字节数完全相同**——参数被静默丢弃，编码器固定在一个约 8.7 Mbps 的档位。
+`ffmpeg -h encoder=h264_stcodec` 里也确实没有任何码率相关选项，但 ffmpeg 侧
+没有报 "option not found"，所以用户完全无从发现。
+
+**现象 B：`h264_v4l2m2m` 直接失败**
+
+```bash
+ffmpeg -nostdin -f lavfi -i testsrc2=size=1280x720:rate=30 -t 2 \
+       -pix_fmt yuv420p -c:v h264_v4l2m2m -b:v 2M /tmp/o.h264 -y
+# → Task finished with error code: -22 (Invalid argument)
+# → Nothing was written into output file
+```
+
+输出 0 字节，退出即报 `-22`，没有任何更具体的提示。
+
+**期望**：
+1. `h264_stcodec` 要么实现 `-b:v`/`-maxrate`/`-bufsize`，要么在未实现时明确报错；
+2. 把当前实际使用的码率/量化参数打到日志里，便于确认；
+3. `h264_v4l2m2m` 区分"格式不支持"和"驱动缺陷"（`-22` 太笼统）。
+
+**影响**：用 ffmpeg 硬编做录制/推流的用户会得到"码率调了没用"或"编码器不可用"，
+两种情况都没有明确错误信息。
+
+---
+
 ## 附：正向结论（一并反馈）
 
 - **VPU 硬编**（修好权限后）：1080p150 帧 1.087s，比 libx264 veryfast 快 4.8×、CPU 少 ~144×。
@@ -533,4 +594,15 @@ work(a, len, 4);                    /* 已在 A100，VLEN=1024 → 栈被写坏 
   opset 6/13、标量/`[1]` 张量 min/max 全部正常；论坛 t/1762 的
   OpenHarmony 崩溃在我们这套上不复现（疑似 OH 侧 EP 是另一个构建）。
 - **TCM**：`/dev/tcm` 存在（3 MB，8×384 KB 块），`CONFIG_SPACEMIT_TCM=y`；
-  `/dev/tcm_sync_mem` 缺失但厂商已确认不影响性能。
+  `/dev/tcm_sync_mem` 缺失但厂商已确认不影响性能。补充实测：直接 `mmap` 后
+  `memcpy` 只有 **~0.01 GB/s**（同尺寸 heap 15.8 GB/s、64 MB DDR 流式 5.4 GB/s），
+  说明这块 TCM 不能当 CPU scratchpad 用，而应走 AI 核/EP 的专用通路。
+- **x86_64 qemu-user + binfmt**：正常工作。`qemu-x86_64` 与 binfmt 直跑
+  （`/proc/sys/fs/binfmt_misc/qemu-x86_64` 已注册）都能跑 x86_64 static busybox，
+  `uname -m` 返回 `x86_64`。论坛 [t/865](https://forum.spacemit.com/t/865) 的
+  SIGILL 在我们这套 Bianbu 4.0.8 上不复现。
+- **Vulkan**：默认 ICD 只枚举到 **llvmpipe**（软件渲染，`apiVersion 1.4.335`）；
+  强制 `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/powervr_mesa_icd.json` 报
+  `Failed to detect any valid GPUs in the current config`。SSH/headless 场景下
+  PowerVR 设备不可见，需有真实图形会话再验证
+  [t/1340](https://forum.spacemit.com/t/1340) 的 `VK_EXT_external_memory_dma_buf`。
