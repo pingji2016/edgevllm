@@ -1,8 +1,9 @@
 # 给 SpaceMiT 的问题清单（可直接提交的 issue 草稿）
 
-> 环境（全部实测于 2026-10-16 ~ 10-19）：
-> **K3 Pico ITX**（riscv64）· Bianbu 4.0.1 · 内核 `6.18.3-cf-k3-1.3.0`
-> 16 核（8× **X100** @2.15GHz + 8× **A100** @1.8GHz）· 15GiB · **SpaceMiT AI Gateway v0.1.15**
+> 环境（实测于 2026-10-16 ~ 11-05）：
+> **K3 Pico ITX**（riscv64）· Bianbu 4.0.1 → **4.0.8** ·
+> 内核 `6.18.3-cf-k3-1.3.0` / `6.18.3-generic` **1.0.1.4 → 1.0.10.4**
+> 16 核（8× **X100** @2.2GHz + 8× **A100** @1.8GHz）· 15GiB · **SpaceMiT AI Gateway v0.1.15**
 > 详细数据见 [`k3-ondevice-ai-report.md`](k3-ondevice-ai-report.md) 对应章节。
 >
 > 提交建议：优先提到对应仓库（`spacemit-com/linux-6.18`、网关/MPP 的仓库）；
@@ -14,7 +15,7 @@
 
 > 2026-11-02 补：开关的准确用法（`echo $$ > /proc/set_ai_thread` / `echo 0`、
 > 子进程继承但跨会话不继承）、X100 vs A100 的完整对照，见
-> [`../k3-a100-cores.md`](../k3-hardware/a100-cores.md)。
+> [`../k3-a100-cores.md`](../k3-a100-cores.md)。
 
 **组件**：内核 HMP 调度（`drivers/soc/spacemit/hmp.c`、`/proc/set_ai_thread`）+ llama.cpp
 
@@ -316,6 +317,114 @@ Aborted (core dumped)
 
 **期望**：统一 protobuf 版本 / 让 ORT 的 python 包用 `protobuf` 的 dynamic message，
 或至少把 `quantization` 子模块单独打包，别让它把描述符池搞崩。
+
+## Issue 10（严重，已在 1.0.10.4 修复）`vsetvli x0,x0`（keep-vl 形式）之后的向量指令必然 SIGILL
+
+**组件**：内核 `6.18.3-generic` **#1.0.1.4**（Bianbu 4.0.1）的向量状态管理
+
+**摘要**：只要用 keep-vl 写法 `vsetvli x0, x0, e8, m1, ta, ma` 设一次 vl，
+**紧随其后的第一条向量指令必定 SIGILL（signal 4 / exit 132）**，
+两条核簇都 100% 复现。换成 `rd ≠ x0` 的任意写法立即正常。
+
+**复现**（`gcc -O1 -march=rv64imafdcv`）：
+
+```c
+static unsigned char buf[64] __attribute__((aligned(64)));
+int main(void){
+  /* rd = x0, rs1 = x0：keep-vl 形式 */
+  __asm__ volatile("vsetvli zero,%0,e8,m1,ta,ma"::"r"(0UL));
+  __asm__ volatile("vle8.v v0,(%0)"::"r"(buf));   /* ← 这里 SIGILL */
+  return 0;
+}
+```
+
+```bash
+taskset -c 0 ./v                      # X100：132 (SIGILL)
+echo $$ > /proc/set_ai_thread; ./v    # A100：132 (SIGILL)
+```
+
+**实测（1.0.1.4）**：
+
+| 写法 | X100 (0–7) | A100 (8–15) |
+| --- | --- | --- |
+| `vsetvli zero, zero, e8, m1, ta, ma`（keep-vl） | **SIGILL 15/15** | **SIGILL 15/15** |
+| `vsetvli a2, zero, e8, m1, ta, ma`（rd≠x0） | ✅ 正常 | ✅ 正常 |
+| `vsetvli zero, 1, e8, m1, ta, ma`（显式 vl） | ✅ 正常 | ✅ 正常 |
+
+**机制（我们的推断）**：keep-vl 形式本应"只改配置、保留当前 vl"，
+但这一版内核在 HMP 的向量上下文切换里没有区分该形式，
+把 `vill`（vector illegal）无条件置位了，下一条向量指令就触发非法指令异常。
+由于这属于内核态行为，`/proc/cpuinfo` 与 ISA 串看不出任何异常，排查成本很高。
+
+**修复验证**：升级到 **`6.18.3-generic #1.0.10.4`**（Bianbu 4.0.8）后，
+同一份二进制在两簇各连跑 6 次，**全部正常**（`vl=0`、`vle8.v` 通过）：
+
+| 内核 | X100 | A100 |
+| --- | --- | --- |
+| 1.0.1.4 | SIGILL 15/15 | SIGILL 15/15 |
+| **1.0.10.4** | ✅ 6/6 | ✅ 6/6 |
+
+**结论**：这是**内核 bug，不是硬件问题**，1.0.10.4 已修复。
+在 1.0.1.4 上编译 RVV 代码时，临时规避是**避免手写 keep-vl 形式的
+`vsetvli`**（GCC/LLVM 正常生成的代码很少用这种形式，所以影响面有限，
+但手写 intrinsics / 汇编的库会踩到）。
+
+---
+
+## Issue 11（中）两簇 VLEN 不同（256 vs 1024），但 `/proc/cpuinfo` 的 ISA 串完全一样且缺 `supm`
+
+**组件**：内核 `/proc/cpuinfo`、`ext_status`（Bianbu 4.0.1 / 4.0.8 均如此）
+
+**摘要**：X100 与 A100 的**向量长度差 4 倍**（256 bit vs 1024 bit），
+但两簇在 `/proc/cpuinfo` 里暴露的 `isa` 字符串**逐字节相同**，
+并且都没有声明 `supm`（RVA23 的指针掩码扩展）。
+仅凭 `/proc/cpuinfo` 做能力探测的软件会得出错误结论。
+
+**实测（`csrr vlenb`，两版内核都一致）**：
+
+| 核簇 | CPU | `vlenb` | VLEN |
+| --- | --- | ---: | ---: |
+| X100 | 0–7 | 32 | **256 bit** |
+| A100 | 8–15 | 128 | **1024 bit** |
+
+```bash
+taskset -c 0  ./vlenb     # X100 → 32
+echo $$ > /proc/set_ai_thread; ./vlenb   # A100 → 128
+grep -m1 isa /proc/cpuinfo   # 两簇字符串相同，且不含 supm
+```
+
+**矛盾点**：板上 `/bin/ls` 的 `Tag_RISCV_arch` 已包含
+`supm`、`zic64b`、`zvl128b`，说明 **Bianbu 的用户态二进制已经是按
+RVA23U64 基线编译的**；但内核的 `/proc/cpuinfo` 没有把这些能力报出来。
+
+**RVA23U64 强制项实测**（板上 GCC 15.2.0，用展开式 `-march=` 逐条探测）：
+
+| 类别 | 扩展 | 结果 |
+| --- | --- | --- |
+| 基础 | M / A / F / D / C / B | ✅ |
+| 向量 | V（RVV 1.0） | ✅ |
+| 缓存块 | Zicbom / Zicbop / Zicboz | ✅ |
+| 条件运算 | Zicond | ✅ |
+| 浮点 | Zfa / Zfhmin / Zfh | ✅ |
+| 压缩 | Zcb / Zcmop | ✅ |
+| 向量位操作 | Zvbb / Zvkt | ✅ |
+| 其他 | Zawrs / Zimop / Zihintntl | ✅ |
+| **可选**（非 RVA23 强制） | Zacas / Zabha | **SIGILL**（符合预期） |
+
+**工具链问题**：板上 GCC 15.2.0 **不认 profile 名**，
+`-march=rva23u64` / `-march=rva23s64` 一律报
+`ISA string must begin with rv32 or rv64`（升级到 `15.2.0-16ubuntu1bb5` 后仍如此），
+必须写成展开的扩展列表才能编译。
+
+**期望**：
+1. `/proc/cpuinfo` 的 `isa` 按**每簇**真实能力输出（至少 VLEN 要能区分）；
+2. 补上 `supm` / `zic64b` / `zvl128b` 等已在实际使用的扩展声明；
+3. GCC 支持 `-march=rva23u64` profile 名（这是上游 GCC 14+ 就有的能力）。
+
+**规避**：能力探测用 `csrr vlenb` / `riscv_hwprobe`，不要相信 `/proc/cpuinfo` 的字符串；
+跨簇代码必须**运行时**读 `vlenb`，不能假设两簇一致。
+
+---
 
 ## 附：正向结论（一并反馈）
 
