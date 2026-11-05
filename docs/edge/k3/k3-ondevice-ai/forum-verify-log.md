@@ -19,6 +19,9 @@
 | [t/1308](https://forum.spacemit.com/t/1308) | A100 核 TCM 状态不一致 | ❌ **不复现** | X100 写入 → A100 读 → X100 读，校验和完全一致 |
 | [t/1311](https://forum.spacemit.com/t/1311) | A100 可否跑非 AI 任务 | ✅ **可以但慢** | sha256 **3.6×** 慢、gzip **2.3×** 慢 |
 | [t/1503](https://forum.spacemit.com/t/1503) | 知了向量化后黑屏 | ❌ **不是软件问题** | 原帖作者后来确认是 TYPE-C 供电不足 |
+| [t/935](https://forum.spacemit.com/t/935) | 60 TOPS 论文指标 | ⚠️ **当前栈复现不了** | EP fp32 MatMul 上限 **86.5 GFLOPS**（=0.087 TOPS）；A100 上无提升；int8 模型全部无法加载 |
+| [t/1127](https://forum.spacemit.com/t/1127) | EP 上 reshape 维度报错 | ❌ **2.0.7 不复现** | 静态 / `-1` / 动态 batch 三种 reshape 全部通过 |
+| [t/1342](https://forum.spacemit.com/t/1342) | Spine-Triton `make_block_ptr` | ⏸ **无法验证** | 板子上没有 triton（私有源），`import triton` 失败 |
 
 ---
 
@@ -182,11 +185,100 @@ ffmpeg -nostdin -f lavfi -i testsrc2=size=8192x8192:rate=1 -frames:v 1 \
 
 ---
 
+## 7. t/935：60 TOPS 在当前软件栈上复现不了
+
+论文标题是《SpacemiT K3: A RVA23 RISC-V AI CPU with 60 TOPS AI Compute》。
+我们用 ONNX Runtime + SpaceMiT EP 2.0.7 做端到端测量。
+
+**fp32 MatMul（EP vs CPU EP，8 线程）**：
+
+| 模型 | 每次算力 | EP | CPU EP | 加速比 |
+| --- | ---: | ---: | ---: | ---: |
+| MatMul 64×4096×4096 | 2.15 GFLOP | 81.5 GFLOPS | 40.7 GFLOPS | 2.0× |
+| MatMul 512×4096×4096 | 17.2 GFLOP | **87.0 GFLOPS** | — | — |
+| MatMul 1024×4096×4096 | 34.4 GFLOP | **86.8 GFLOPS** | — | — |
+
+N 从 64 加到 1024，GFLOPS 基本不变（81.5 → 86.8），说明已经算力受限、不是带宽受限。
+
+**X100 vs A100**（同一个 1024×4096×4096 MatMul）：
+
+| 核组 | 耗时 | GFLOPS |
+| --- | ---: | ---: |
+| X100（cpu0-7） | 397.4 ms | **86.5** |
+| A100（cpu8-15，exec 前切核） | 402.7 ms | 85.3 |
+
+**A100 没有任何提升**，说明 fp32 MatMul 走的是向量路径，没有用上 IME。
+只有 int8 才会走 IME2。
+
+**int8 路径：三个真实模型全部无法加载**
+
+| 模型 | 类型 | 结果 |
+| --- | --- | --- |
+| `dino-vits16/onnx/model_quantized.onnx`（22 MB） | QDQ int8 | ❌ EP 初始化失败 |
+| `von13_int8.onnx`（379 MB） | int8 | ❌ EP 初始化失败 |
+| `sherpa/encoder-...int8.onnx`（174 MB） | int8 | ❌ EP 初始化失败 |
+| 合成 `QLinearConv` | QLinear int8 | ❌ EP 初始化失败 |
+
+统一报错：
+
+```
+Exception during initialization: compiler_depend.ts:371
+static const onnxruntime::logging::Logger&
+onnxruntime::logging::LoggingManager::DefaultLogger()
+Attempt to use DefaultLogger but none has been registered.
+```
+
+这和 Issue 8（EP 在 QDQ 模型上崩溃）是同一类问题：现在不崩了，但换成了初始化异常，**int8 依然不可用**。
+
+**结论**：
+
+- 当前 `python3-spacemit-ort 2.0.7+2` + 通用 ONNX 模型，**可用算力上限约 87 GFLOPS（fp32）**；
+- 60 TOPS 是 IME2 的峰值指标，需要 int8 才能触发，而 int8 路径在我们这版上**完全跑不起来**，
+  所以无法通过 ORT 复现，只能标注为「未能验证」；
+- 即使按 int8 ≈ 4× fp32 粗估（约 0.35 TOPS），距离 60 TOPS 仍有约 170× 的差距——
+  这个差距来自「峰值 vs 可达」，不是芯片虚标，但**官方文档需要说明怎么才能接近峰值**
+  （IME intrinsics？Spine-Triton？专用量化工具？）。
+
+> 附：单节点 `Conv 256ch 3×3 56×56`（3.7 GFLOP）在 EP 下仍由 CPU 执行
+> （40–43 GFLOPS），说明 EP 并不会把任意单个 Conv 节点 offload；
+> 真实模型的加速来自整图融合，不能靠单算子微基准衡量。
+
+---
+
+## 8. t/1127：reshape 维度问题在 EP 2.0.7 上不再复现
+
+原帖（2.0.2+beta1）在跑 `mixformer_v2.onnx` 时报 reshape 维度错误。我们无法拿到该模型，
+改用三种常见写法构造最小模型（`Reshape → MatMul`，输入 `[1,3,8,8]`）：
+
+| 写法 | EP 结果 | CPU 结果 |
+| --- | --- | --- |
+| 静态目标 `[1,192]` | ✅ rc=0，输出 `(1,192)` | ✅ |
+| `-1` 推导 `[1,-1]` | ✅ rc=0 | ✅ |
+| 动态 batch（`Shape→Slice→Concat→Reshape`） | ✅ rc=0 | ✅ |
+
+动态写法连跑 3 次全部 rc=0，没有崩溃。
+
+**结论**：2.0.7 上这三类 reshape 都正常。原帖的失败很可能是 2.0.2 的旧问题，
+官方建议的「升级 `spacemit-ort` + 用 `xslim` 精简模型」方向正确；但因为没有
+`mixformer_v2` 本体，**不能 100% 断言原模型已修**。
+
+> `xslim` 在板子上未安装（`pip install xslim` 可从公网装），本次未验证。
+
+---
+
+## 9. t/1342：Spine-Triton 无法验证
+
+`import triton` 直接失败，`pip list` 里也没有 `triton` / `spine-triton`；
+板子上只有 `onnx`、`onnxruntime`、`spacemit-ort`、`llama.cpp-tools-spacemit` 等。
+Spine-Triton 的安装包在私有源，无法从公网获取，因此 `make_block_ptr` 相关问题**未验证**。
+
+---
+
 ## 附：本轮未跑但已排除的帖子
 
 | 帖子 | 原因 |
 | --- | --- |
-| t/1342 / t/1298 / t/1320 Spine-Triton 相关 | 需要私有源里的 triton，板子上没装 |
+| t/1342 / t/1298 / t/1320 Spine-Triton 相关 | 需要私有源里的 triton，板子上没装（见第 9 节） |
 | t/1341 `libspine_gemm_bridge.so` | 楼主已在 #3 自述解决；该库不在 `spacemit-tcm` 包内 |
-| t/1127 reshape 维度（20 回复） | 需要 mixformer_v2 模型；官方给的解法是升级 `spacemit-ort` + `xslim` 精简，我们无该模型无法判定 |
+| t/1127 reshape 维度（20 回复） | 构造的三个 reshape 最小例都正常，但无 `mixformer_v2` 本体（见第 8 节） |
 | t/1612 / t/1748 / t/1727 | 分别需要 K1 场景 / amd64·arm64 / RX550，K3 上不可验证 |
