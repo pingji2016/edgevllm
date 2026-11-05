@@ -397,6 +397,21 @@ grep -m1 isa /proc/cpuinfo   # 两簇字符串相同，且不含 supm
 `supm`、`zic64b`、`zvl128b`，说明 **Bianbu 的用户态二进制已经是按
 RVA23U64 基线编译的**；但内核的 `/proc/cpuinfo` 没有把这些能力报出来。
 
+**同一个问题的第二个例子（H 扩展）**：`/proc/cpuinfo` 的 isa 串明确写着
+`rv64imafdcv`**`h`**`_...`，但用户态执行 `csrr vsstatus` 在
+**X100 和 A100 上都触发 SIGILL**（两簇一致，1.0.8/1.0.10.4 都一样）：
+
+| 核簇 | isa 串含 `h` | `csrr vsstatus` |
+| --- | --- | --- |
+| X100 (0–7) | 是 | **SIGILL** |
+| A100 (8–15) | 是 | **SIGILL** |
+
+也就是说 isa 串声明了 H，但 H 并没有真正对用户态可用（该固件的
+OpenSBI 没有打开，或按 K3 的规则只对 X100 开、而实际未生效）。
+这条和 `supm` 一样，都说明 **`/proc/cpuinfo` 的 isa 串只能当参考，
+不能当作能力探测依据**——要么用 `csrr vlenb` / `riscv_hwprobe`，
+要么直接探测指令是否可用（`SIGILL` 兜底）。
+
 **RVA23U64 强制项实测**（板上 GCC 15.2.0，用展开式 `-march=` 逐条探测）：
 
 | 类别 | 扩展 | 结果 |
@@ -426,6 +441,87 @@ RVA23U64 基线编译的**；但内核的 `/proc/cpuinfo` 没有把这些能力�
 
 ---
 
+## Issue 12（严重，1.0.10.4 仍未修）进程内切 A100：向量状态不匹配，栈被写坏 → SIGSEGV
+
+**组件**：内核 HMP `/proc/set_ai_thread` + 向量上下文切换
+
+**来源**：论坛 [t/1482](https://forum.spacemit.com/t/1482)（GCC 在 A100 上"栈溢出"）、
+[t/1684](https://forum.spacemit.com/t/1684)（OpenBLAS 作者也提到这条迁移路径会 SIGSEGV）。
+我们补一份**最小复现 + 对照实验**，并确认 **1.0.10.4 没有修**。
+
+**复现**（RV 向量内核，和论坛同构）：
+
+```c
+static int32_t work(const int16_t *p, int len, int shift){
+  int64_t acc = 0; int nc = len & ~3;
+  for (int n = 0; n < nc;) {
+    size_t vl = __riscv_vsetvl_e16m1((size_t)(nc - n));
+    vint16m1x2_t v = __riscv_vlseg2e16_v_i16m1x2(p + 2*n, vl);
+    vint16m1_t cr = __riscv_vget_v_i16m1x2_i16m1(v, 0);
+    vint16m1_t ci = __riscv_vget_v_i16m1x2_i16m1(v, 1);
+    vint32m2_t pw = __riscv_vwmacc_vv_i32m2(
+        __riscv_vwmul_vv_i32m2(cr, cr, vl), ci, ci, vl);
+    pw = __riscv_vsra_vx_i32m2(pw, shift, vl);
+    acc += __riscv_vmv_x_s_i64m1_i64(
+        __riscv_vwredsum_vs_i32m2_i64m1(pw, __riscv_vmv_s_x_i64m1(0,1), vl));
+    n += (int)vl;
+  }
+  return (int32_t)acc;
+}
+
+work(a, len, 2);                    /* 先在 X100 上跑向量，VLEN=256 */
+write(open("/proc/set_ai_thread", O_WRONLY), "self_pid", ...);
+work(a, len, 4);                    /* 已在 A100，VLEN=1024 → 栈被写坏 */
+```
+
+**实测（`pingji-k3`，Bianbu 4.0.8，内核 `6.18.3-generic #1.0.10.4`）**：
+
+| 场景 | 结果 |
+| --- | --- |
+| 纯 X100，跑两遍向量（不切换） | ✅ `rc=0`，结果正确 |
+| **exec 前**切 A100（`echo $$ > /proc/set_ai_thread; exec prog`） | ✅ `rc=0`，结果正确 |
+| 进程内跑过向量再切 A100（`-fstack-protector-all`） | ❌ **`rc=134`** 栈保护触发（计算值仍正确，canary 被写坏） |
+| 同上，`-fno-stack-protector` | ❌ **`rc=139` SIGSEGV**（3/3 稳定） |
+
+**关键点**：不是"你显式写过向量指令"才会中招 —— **glibc 启动时 `memcpy` 就用 RVV**，
+所以任何正常启动的进程在切换前都已经持有 VLEN=256 的向量状态。
+论坛里 `aix` / `k3_taskset` 之所以有效，就是它们在 **exec 之前**完成切换。
+
+**期望**：
+1. 切换核簇时按目标 hart 的 `vlenb` 完整保存/恢复向量状态（或直接丢弃并重置 `vill`），
+   不要把旧 VLEN 的寄存器内容按新 VLEN 解释；
+2. 或者检测到线程已有向量上下文时**拒绝切换**并返回 `-EBUSY`，而不是静默写坏用户栈；
+3. 文档里把"必须在 exec 前切换"写成硬性前提（现在是社区自己踩出来的）。
+
+---
+
+## Issue 13（中）PMU `stalled-cycles-frontend` / `stalled-cycles-backend` 语义疑似对调
+
+**组件**：K3 X100 的 PMU 通用事件映射（perf `PERF_COUNT_HW_STALLED_CYCLES_FRONTEND` = 0x7、`..._BACKEND` = 0x8）
+
+**来源**：论坛 [t/1500](https://forum.spacemit.com/t/1500)（厂商已回复"会尽快修复"）。
+
+**我们的验证**（`perf stat`，X100 单核，各跑 1.5s）：
+
+| 负载 | `stalled-cycles-frontend` | `stalled-cycles-backend` |
+| --- | ---: | ---: |
+| 随机内存访问（pointer chase，L1D/LLC miss 为主） | **27.28%** | 3.85% |
+| 间接跳转 / 不可预测分支（函数指针表） | 8.64% | **91.44%** |
+
+按标准语义应当是"内存 miss → backend 高、控制流 → frontend 高"，实测**正好相反**：
+
+| 负载 | 期望表现 | 实测表现 |
+| --- | --- | --- |
+| 随机内存访问 | backend 高 | **frontend 高** |
+| 间接跳转 | frontend 高 | **backend 高** |
+
+**影响**：任何按标准语义调优的 perf 分析都会得出相反结论（例如把内存瓶颈误判为取指瓶颈）。
+
+**期望**：修正两个通用事件到硬件事件的映射，或提供 K3 的 PMU 事件对照表
+（`mhpmevent3..31` 的 event id / 过滤域），并在 `perf list` 里给出 K3 专属别名。
+
+---
+
 ## 附：正向结论（一并反馈）
 
 - **VPU 硬编**（修好权限后）：1080p150 帧 1.087s，比 libx264 veryfast 快 4.8×、CPU 少 ~144×。
@@ -433,3 +529,8 @@ RVA23U64 基线编译的**；但内核的 `/proc/cpuinfo` 没有把这些能力�
 - **VAD**：10s 音频 **288ms**（34× 实时）。
 - **TTS 流式**：按句 append 每句 ~0.5s 出声，是整套栈里最好用的一块。
 - **A100 的正确定位**：int8/IME 算子专用核；`/proc/set_ai_thread` 一行即可切换，机制本身很干净。
+- **EP 的 Clip / 5 维输入**：Bianbu 4.0.8 + `libspacemit_ep.so.2.0.6` 上，4D/5D、
+  opset 6/13、标量/`[1]` 张量 min/max 全部正常；论坛 t/1762 的
+  OpenHarmony 崩溃在我们这套上不复现（疑似 OH 侧 EP 是另一个构建）。
+- **TCM**：`/dev/tcm` 存在（3 MB，8×384 KB 块），`CONFIG_SPACEMIT_TCM=y`；
+  `/dev/tcm_sync_mem` 缺失但厂商已确认不影响性能。
