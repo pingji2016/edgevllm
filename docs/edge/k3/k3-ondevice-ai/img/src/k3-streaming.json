@@ -1,0 +1,27 @@
+{
+  "title": "k3-streaming",
+  "width": 1200,
+  "height": 640,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 600, "y": 40, "text": "同一个问题，什么时候能听到第一声？", "fontSize": 28, "subtitle": "流式把「等全部生成」拆成「每切一句就合成」" },
+
+    { "type": "rectangle", "x": 40, "y": 110, "width": 1120, "height": 200, "fill": "#ebfbee", "sectionLabel": "流式：边生成边合成" },
+    { "type": "rectangle", "id": "s1", "x": 70, "y": 160, "width": 220, "height": 100, "label": "LLM token 流", "annotation": "首 token 1.59 s", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "s2", "x": 330, "y": 160, "width": 220, "height": 100, "label": "按标点切句", "annotation": "逗号也切", "fill": "#fcc2d7", "rounded": true },
+    { "type": "rectangle", "id": "s3", "x": 590, "y": 160, "width": 250, "height": 100, "label": "TTS 逐句 append", "annotation": "第 1 句 0.55 s 出声", "fill": "#d0bfff", "rounded": true },
+    { "type": "rectangle", "id": "s4", "x": 880, "y": 160, "width": 250, "height": 100, "label": "喇叭边收边播", "annotation": "首音 3.03 s", "fill": "#ffec99", "rounded": true },
+    { "type": "arrow", "from": "s1", "to": "s2" },
+    { "type": "arrow", "from": "s2", "to": "s3" },
+    { "type": "arrow", "from": "s3", "to": "s4" },
+
+    { "type": "rectangle", "x": 40, "y": 350, "width": 1120, "height": 200, "fill": "#fff0f6", "sectionLabel": "非流式：等 LLM 全部生成，再整段 TTS" },
+    { "type": "rectangle", "id": "b1", "x": 70, "y": 400, "width": 360, "height": 100, "label": "LLM 全量生成", "annotation": "≈25 s（258 字回答）", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "b2", "x": 590, "y": 400, "width": 250, "height": 100, "label": "整段 TTS", "annotation": "3.98 s 才回一整块", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "b3", "x": 880, "y": 400, "width": 250, "height": 100, "label": "喇叭", "annotation": "首音 28.41 s", "fill": "#ffd8a8", "rounded": true },
+    { "type": "arrow", "from": "b1", "to": "b2" },
+    { "type": "arrow", "from": "b2", "to": "b3" },
+
+    { "type": "text", "x": 600, "y": 595, "text": "3.03 s vs 28.41 s —— 快 9.4 倍", "fontSize": 20 }
+  ]
+}

@@ -44,7 +44,7 @@ index 3685094..0f81b20 100644
          del self.model_runner
          for p in self.ps:
 diff --git a/nanovllm/engine/model_runner.py b/nanovllm/engine/model_runner.py
-index 71d9883..16400a3 100644
+index 71d9883..f56d9e0 100644
 --- a/nanovllm/engine/model_runner.py
 +++ b/nanovllm/engine/model_runner.py
 @@ -18,16 +18,17 @@ class ModelRunner:
@@ -78,7 +78,7 @@ index 71d9883..16400a3 100644
          dist.destroy_process_group()
  
      def loop(self):
-@@ -89,28 +89,32 @@ class ModelRunner:
+@@ -89,30 +89,34 @@ class ModelRunner:
          return method(*args)
  
      def warmup_model(self):
@@ -118,8 +118,11 @@ index 71d9883..16400a3 100644
 -        config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
 +        config.num_kvcache_blocks = config.num_kvcache_blocks if config.num_kvcache_blocks > 0 else budget // block_bytes
          assert config.num_kvcache_blocks > 0
-         self.kv_cache = torch.empty(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, head_dim)
+-        self.kv_cache = torch.empty(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, head_dim)
++        self.kv_cache = torch.zeros(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, head_dim)
          layer_id = 0
+         for module in self.model.modules():
+             if hasattr(module, "k_cache") and hasattr(module, "v_cache"):
 @@ -123,7 +127,7 @@ class ModelRunner:
      def prepare_block_tables(self, seqs: list[Sequence]):
          max_len = max(len(seq.block_table) for seq in seqs)
@@ -182,10 +185,11 @@ index 06cced3..0b45599 100755
          x, y = x.chunk(2, -1)
          return F.silu(x) * y
 diff --git a/nanovllm/layers/attention.py b/nanovllm/layers/attention.py
-index e416139..0cf3538 100644
+index e416139..c982dea 100644
 --- a/nanovllm/layers/attention.py
 +++ b/nanovllm/layers/attention.py
-@@ -1,54 +1,57 @@
+@@ -1,54 +1,51 @@
++import os
  import torch
 +import torch.nn.functional as F
  from torch import nn
@@ -242,30 +246,23 @@ index e416139..0cf3538 100644
 -    assert k_cache.stride(1) == D and v_cache.stride(1) == D
 -    assert slot_mapping.numel() == N
 -    store_kvcache_kernel[(N,)](key, key.stride(0), value, value.stride(0), k_cache, v_cache, slot_mapping, D)
-+def _gather(k_cache, v_cache, block_table, seqlen, nkv, hd):
-+    bt = block_table[block_table >= 0].to(torch.long)
-+    k = k_cache.index_select(0, bt).reshape(-1, nkv, hd)[:seqlen]
-+    v = v_cache.index_select(0, bt).reshape(-1, nkv, hd)[:seqlen]
-+    return k, v
-+
-+
 +def _attend(q, k, v, scale, causal=True, offset=0):
-+    """q:[lq,nh,d] k/v:[lk,nkv,d] -> [lq,nh,d]"""
++    """q:[lq,nh,d] k/v:[lk,nkv,d] -> [lq,nh,d]，K/V 头数不同时用 enable_gqa 免拷贝"""
 +    nh, nkv = q.size(1), k.size(1)
-+    if nh != nkv:
-+        k = k.repeat_interleave(nh // nkv, dim=1)
-+        v = v.repeat_interleave(nh // nkv, dim=1)
 +    qh = q.transpose(0, 1).unsqueeze(0)
 +    kh = k.transpose(0, 1).unsqueeze(0)
 +    vh = v.transpose(0, 1).unsqueeze(0)
++    gqa = nh != nkv
 +    if causal and offset > 0:
 +        lq, lk = qh.size(2), kh.size(2)
 +        qpos = torch.arange(lq).view(-1, 1) + offset
 +        kpos = torch.arange(lk).view(1, -1)
 +        mask = (kpos <= qpos).unsqueeze(0).unsqueeze(0)
-+        o = F.scaled_dot_product_attention(qh, kh, vh, attn_mask=mask, scale=scale)
++        o = F.scaled_dot_product_attention(qh, kh, vh, attn_mask=mask,
++                                           scale=scale, enable_gqa=gqa)
 +    else:
-+        o = F.scaled_dot_product_attention(qh, kh, vh, is_causal=causal, scale=scale)
++        o = F.scaled_dot_product_attention(qh, kh, vh, is_causal=causal,
++                                           scale=scale, enable_gqa=gqa)
 +    return o.squeeze(0).transpose(0, 1)
  
  
@@ -282,7 +279,7 @@ index e416139..0cf3538 100644
          super().__init__()
          self.num_heads = num_heads
          self.head_dim = head_dim
-@@ -56,20 +59,29 @@ class Attention(nn.Module):
+@@ -56,20 +53,51 @@ class Attention(nn.Module):
          self.num_kv_heads = num_kv_heads
          self.k_cache = self.v_cache = torch.tensor([])
  
@@ -293,7 +290,7 @@ index e416139..0cf3538 100644
          if k_cache.numel() and v_cache.numel():
              store_kvcache(k, v, k_cache, v_cache, context.slot_mapping)
 +        nkv, hd = self.num_kv_heads, self.head_dim
-+        outs = []
++
          if context.is_prefill:
 -            if context.block_tables is not None:    # prefix cache
 -                k, v = k_cache, v_cache
@@ -306,24 +303,46 @@ index e416139..0cf3538 100644
 -                                        cache_seqlens=context.context_lens, block_table=context.block_tables, 
 -                                        softmax_scale=self.scale, causal=True)
 -        return o
++            outs = []
 +            cu_q = context.cu_seqlens_q.tolist()
 +            cu_k = context.cu_seqlens_k.tolist()
 +            for i in range(len(cu_q) - 1):
 +                qs, qe = cu_q[i], cu_q[i + 1]
 +                ks, ke = cu_k[i], cu_k[i + 1]
 +                if context.block_tables is not None:
-+                    kk, vv = _gather(k_cache, v_cache, context.block_tables[i], ke, nkv, hd)
++                    bt = context.block_tables[i]
++                    bt = bt[bt >= 0].to(torch.long)
++                    kk = k_cache.index_select(0, bt).reshape(-1, nkv, hd)[:ke]
++                    vv = v_cache.index_select(0, bt).reshape(-1, nkv, hd)[:ke]
 +                else:
 +                    kk, vv = k[ks:ke], v[ks:ke]
 +                outs.append(_attend(q[qs:qe], kk, vv, self.scale, True, offset=ke - (qe - qs)))
-+        else:
-+            for i in range(q.size(0)):
-+                clen = int(context.context_lens[i])
-+                kk, vv = _gather(k_cache, v_cache, context.block_tables[i], clen, nkv, hd)
-+                outs.append(_attend(q[i:i + 1], kk, vv, self.scale, False))
-+        if not outs:
-+            return q.new_empty((0, q.size(1), q.size(2)))
-+        return torch.cat(outs, 0)
++            return torch.cat(outs, 0) if outs else q.new_empty((0, q.size(1), q.size(2)))
++
++        # decode：所有序列一次性 gather + 一次批量 SDPA（bs=1 走无 mask 快路径）
++        bs = q.size(0)
++        mode = os.environ.get("ATT_MODE", "full")
++        if mode == "noattn":       # 拆解实验：跳过 attention，只量线性层
++            return torch.zeros_like(q)
++        clens = context.context_lens
++        bt = context.block_tables
++        L = int(clens.max())
++        if mode == "short":        # 拆解实验：只读 1 个 block（256 token）
++            L = min(L, 256)
++        nb = (L + k_cache.size(1) - 1) // k_cache.size(1)
++        bt = bt[:, :nb]                                  # 只取用到的块
++        idx = torch.where(bt >= 0, bt, torch.zeros_like(bt)).to(torch.long)
++        kk = k_cache.index_select(0, idx.reshape(-1)).reshape(bs, -1, nkv, hd)[:, :L]
++        vv = v_cache.index_select(0, idx.reshape(-1)).reshape(bs, -1, nkv, hd)[:, :L]
++        if bs == 1:
++            return _attend(q, kk[0], vv[0], self.scale, False)
++        keep = torch.arange(L, device=q.device).view(1, -1) < clens.view(-1, 1)
++        qh = q.unsqueeze(2)                              # [bs,nh,1,hd]
++        o = F.scaled_dot_product_attention(
++            qh, kk.permute(0, 2, 1, 3), vv.permute(0, 2, 1, 3),
++            attn_mask=keep.view(bs, 1, 1, L), scale=self.scale,
++            enable_gqa=(q.size(1) != nkv))
++        return o.squeeze(2)
 diff --git a/nanovllm/layers/layernorm.py b/nanovllm/layers/layernorm.py
 index 71bf419..cdf198e 100755
 --- a/nanovllm/layers/layernorm.py

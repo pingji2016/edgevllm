@@ -311,9 +311,13 @@ SIGSEGV in onnxruntime::spacemit::SpineNode::SpineNode(onnxruntime::Node const*)
 
 ---
 
-## Issue 9（中）`onnxruntime.quantization` 模块无法导入：protobuf 描述符冲突直接 abort
+## Issue 9（严重）protobuf 描述符池冲突：`onnxruntime.quantization` 与 `torch.onnx.export` 双双直接 abort
 
-**组件**：`python3-onnx` 1.20.0 + ORT `1.24.2+spacemit.a1`（同一进程）
+**组件**：`python3-onnx` 1.20.0 + ORT `1.24.2+spacemit.a1` + `torch 2.9.1+debian`
+
+同一个 C++ 层根因（`onnx/onnx-ml.proto` 被注册两次），至少两个入口会打到：
+
+**(a) 离线量化不可用**
 
 ```bash
 $ python3 -c "import onnxruntime.quantization"
@@ -326,11 +330,34 @@ Aborted (core dumped)
 - `import onnxruntime.quantization` **单独 import 也崩** ❌
 - `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` **无效**（崩在 ORT 自带的 C++ protobuf）
 
-**影响**：板上**无法做离线量化**（`quantize_static` / `quantize_dynamic` 全部不可用），
-而 K3 的卖点之一就是 int8；用户只能去别的机器量化好再拷过来。
+**(b) PyTorch → ONNX 导出完全不可用**
+
+```bash
+$ python3 -c "
+import torch, torch.nn as nn
+class M(nn.Module):
+    def forward(self, x): return x * 2 + 1
+torch.onnx.export(M(), (torch.randn(2, 3),), '/tmp/t.onnx', opset_version=17)"
+[libprotobuf FATAL google/protobuf/descriptor.cc:1988] CHECK failed: GeneratedDatabase()->Add(encoded_file_descriptor, size):
+Aborted (core dumped)
+```
+
+- 连 `x*2+1` 这种 2×3 张量的模型都会 abort，**和模型大小无关**
+  （8 层 Qwen3 切片 1.1 GB 一样崩，完整的 2.4 GB 更是没机会）
+- `dynamo=False` / `dynamo=True` 都受影响（后者还需额外装 `onnxscript`）
+- `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` 同样无效
+
+**影响**：
+
+1. 板上**无法做离线量化**（`quantize_static` / `quantize_dynamic` 全部不可用），
+   而 K3 的卖点之一就是 int8；用户只能去别的机器量化好再拷过来。
+2. 板上**任何 PyTorch→ONNX 的流程全部断掉**：optimum 导出 LLM、YOLO/ultralytics 导出、
+   自定义算子导出都不行。想在 K3 上「训练/微调 → 导出 → EP 推理」闭环是不可能任务。
+   唯一绕法是用 onnx Python API 手工构图（这条路径正常，`onnx.save` 没问题）。
 
 **期望**：统一 protobuf 版本 / 让 ORT 的 python 包用 `protobuf` 的 dynamic message，
-或至少把 `quantization` 子模块单独打包，别让它把描述符池搞崩。
+或至少把 `quantization` 子模块单独打包、给 torch 换一个不与 `python3-onnx`
+共享描述符池的构建，别让它把描述符池搞崩。
 
 ## Issue 10（严重，已在 1.0.10.4 修复）`vsetvli x0,x0`（keep-vl 形式）之后的向量指令必然 SIGILL
 

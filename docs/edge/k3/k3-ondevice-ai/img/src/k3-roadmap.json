@@ -1,0 +1,36 @@
+{
+  "title": "k3-roadmap",
+  "width": 1200,
+  "height": 700,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 600, "y": 38, "text": "从「我敲一条命令」到「产品」还差什么", "fontSize": 27, "subtitle": "绿的已经在板上跑通，黄的差硬件/工程，灰的还没开始" },
+
+    { "type": "rectangle", "x": 40, "y": 100, "width": 360, "height": 470, "fill": "#ebfbee", "sectionLabel": "已经跑通（脚本 + 文件输入）" },
+    { "type": "rectangle", "id": "a1", "x": 65, "y": 150, "width": 310, "height": 66, "label": "离线语音一整轮", "annotation": "18 s，含 ASR/LLM/TTS", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "a2", "x": 65, "y": 232, "width": 310, "height": 66, "label": "图片检测 14.8 ms", "annotation": "14 个视觉模型全测过", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "a3", "x": 65, "y": 314, "width": 310, "height": 66, "label": "长音频 VAD 切段", "annotation": "快 9×，直接出 SRT", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "a4", "x": 65, "y": 396, "width": 310, "height": 66, "label": "VPU 硬编 138 fps", "annotation": "H.264 / HEVC 1080p", "fill": "#b2f2bb", "rounded": true },
+    { "type": "rectangle", "id": "a5", "x": 65, "y": 478, "width": 310, "height": 66, "label": "流式首音 3.03 s", "annotation": "LLM 流 + 按标点切句", "fill": "#b2f2bb", "rounded": true },
+
+    { "type": "rectangle", "x": 420, "y": 100, "width": 360, "height": 470, "fill": "#fff9db", "sectionLabel": "差一步（实时化 + 常驻）" },
+    { "type": "rectangle", "id": "b1", "x": 445, "y": 150, "width": 310, "height": 66, "label": "USB 麦克风 / 摄像头", "annotation": "板子没有，得插硬件", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "b2", "x": 445, "y": 232, "width": 310, "height": 66, "label": "唤醒词 + 打断", "annotation": "现在一问一答，不能插话", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "b3", "x": 445, "y": 314, "width": 310, "height": 66, "label": "常驻 systemd 服务", "annotation": "现在是手动跑脚本", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "b4", "x": 445, "y": 396, "width": 310, "height": 66, "label": "多路视频并发", "annotation": "8 路只放大 2× 吞吐", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "b5", "x": 445, "y": 478, "width": 310, "height": 66, "label": "流式 ASR", "annotation": "网关的流式是假的", "fill": "#ffec99", "rounded": true },
+
+    { "type": "rectangle", "x": 800, "y": 100, "width": 360, "height": 470, "fill": "#f1f3f5", "sectionLabel": "还没做（产品化）" },
+    { "type": "rectangle", "id": "c1", "x": 825, "y": 150, "width": 310, "height": 66, "label": "VLM 视频理解", "annotation": "单帧 58.7 s，太慢", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "c2", "x": 825, "y": 232, "width": 310, "height": 66, "label": "RAG / 知识库", "annotation": "rerank 11 s/篇，不可用", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "c3", "x": 825, "y": 314, "width": 310, "height": 66, "label": "CAN / 机器人控制", "annotation": "CAN-FD 设备树没使能", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "c4", "x": 825, "y": 396, "width": 310, "height": 66, "label": "ROM / OTA 集成", "annotation": "把 AI 栈烧进系统镜像", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "c5", "x": 825, "y": 478, "width": 310, "height": 66, "label": "功耗 / 降频 / 压测", "annotation": "没有功率计，只测了温度", "fill": "#dee2e6", "rounded": true },
+
+    { "type": "arrow", "from": "a1", "to": "b1", "fromSide": "right", "toSide": "left", "label": "" },
+    { "type": "arrow", "from": "b1", "to": "c1", "fromSide": "right", "toSide": "left", "label": "" },
+
+    { "type": "text", "x": 600, "y": 610, "text": "一句话：算力已经够用了，缺的是「输入设备 + 常驻服务 + 产品化」这三步", "fontSize": 16 },
+    { "type": "text", "x": 600, "y": 646, "text": "黄色的五项全部卡在硬件或厂方 bug 上，不是算法问题", "fontSize": 14, "color": "#868e96" }
+  ]
+}

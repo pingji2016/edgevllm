@@ -1,0 +1,29 @@
+{
+  "title": "k3-voice-pipeline",
+  "width": 1200,
+  "height": 560,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 600, "y": 40, "text": "一次离线语音对话的完整链路", "fontSize": 28, "subtitle": "全部在板内完成，不联网；括号里是本机实测" },
+
+    { "type": "rectangle", "id": "in", "x": 60, "y": 130, "width": 200, "height": 100, "label": "麦克风 / WAV", "annotation": "16 kHz 单声道", "fill": "#ffd8a8", "rounded": true },
+    { "type": "rectangle", "id": "vad", "x": 330, "y": 130, "width": 200, "height": 100, "label": "VAD 门控", "annotation": "silero · 34× 实时", "fill": "#ffec99", "rounded": true },
+    { "type": "rectangle", "id": "asr", "x": 600, "y": 130, "width": 220, "height": 100, "label": "SenseVoice ASR", "annotation": "2.39 s · RTF 0.24", "fill": "#a5d8ff", "rounded": true },
+    { "type": "rectangle", "id": "llm", "x": 890, "y": 130, "width": 240, "height": 100, "label": "Qwen3.5-2B", "annotation": "9.89 s · 6.3 t/s", "fill": "#b2f2bb", "rounded": true },
+
+    { "type": "rectangle", "id": "split", "x": 890, "y": 330, "width": 240, "height": 100, "label": "按标点切句", "annotation": "逗号 / 顿号 / 句号", "fill": "#fcc2d7", "rounded": true },
+    { "type": "rectangle", "id": "tts", "x": 600, "y": 330, "width": 220, "height": 100, "label": "Matcha-TTS 流式", "annotation": "每句约 0.5 s 出声", "fill": "#d0bfff", "rounded": true },
+    { "type": "rectangle", "id": "pcm", "x": 330, "y": 330, "width": 200, "height": 100, "label": "PCM 拼接", "annotation": "ffmpeg -ac 2 -ar 48000", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "out", "x": 60, "y": 330, "width": 200, "height": 100, "label": "喇叭", "annotation": "ES8326 · 48k 立体声", "fill": "#ffd8a8", "rounded": true },
+
+    { "type": "arrow", "from": "in", "to": "vad" },
+    { "type": "arrow", "from": "vad", "to": "asr", "label": "语音段" },
+    { "type": "arrow", "from": "asr", "to": "llm", "label": "文本" },
+    { "type": "arrow", "from": "llm", "to": "split", "fromSide": "bottom", "toSide": "top", "label": "token 流" },
+    { "type": "arrow", "from": "split", "to": "tts", "label": "逐句" },
+    { "type": "arrow", "from": "tts", "to": "pcm", "label": "音频块" },
+    { "type": "arrow", "from": "pcm", "to": "out", "label": "边到边播" },
+
+    { "type": "text", "x": 600, "y": 500, "text": "整轮约 18 s，其中 LLM 占 9.9 s；流式改造后首音 3.03 s（非流式 28.41 s）", "fontSize": 16 }
+  ]
+}

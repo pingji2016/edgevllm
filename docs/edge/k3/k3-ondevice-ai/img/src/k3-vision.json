@@ -1,0 +1,24 @@
+{
+  "title": "k3-vision",
+  "width": 1200,
+  "height": 520,
+  "background": "#FAF8F5",
+  "elements": [
+    { "type": "text", "x": 600, "y": 40, "text": "一张图到结果：28 毫秒", "fontSize": 28, "subtitle": "yolov8n int8，走 A100 的 IME 算子（板内实测）" },
+
+    { "type": "rectangle", "id": "v1", "x": 50, "y": 120, "width": 190, "height": 110, "label": "图片 / 摄像头", "annotation": "bus.jpg 810×1080", "fill": "#ffd8a8", "rounded": true },
+    { "type": "rectangle", "id": "v2", "x": 280, "y": 120, "width": 190, "height": 110, "label": "预处理", "annotation": "12.6 ms", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "v3", "x": 510, "y": 120, "width": 190, "height": 110, "label": "SpaceMIT EP", "annotation": "14.8 ms", "fill": "#d0bfff", "rounded": true },
+    { "type": "rectangle", "id": "v4", "x": 740, "y": 120, "width": 190, "height": 110, "label": "后处理", "annotation": "0.43 ms", "fill": "#dee2e6", "rounded": true },
+    { "type": "rectangle", "id": "v5", "x": 970, "y": 120, "width": 190, "height": 110, "label": "结果", "annotation": "4 人 + 1 公交", "fill": "#b2f2bb", "rounded": true },
+    { "type": "arrow", "from": "v1", "to": "v2" },
+    { "type": "arrow", "from": "v2", "to": "v3" },
+    { "type": "arrow", "from": "v3", "to": "v4" },
+    { "type": "arrow", "from": "v4", "to": "v5" },
+
+    { "type": "rectangle", "id": "cpu", "x": 400, "y": 330, "width": 400, "height": 100, "label": "纯 CPU EP（-e cpu）", "annotation": "832 ms / 帧", "fill": "#ffd8a8", "rounded": true },
+    { "type": "arrow", "from": "cpu", "to": "v3", "label": "快 56×", "fromSide": "top", "toSide": "bottom" },
+
+    { "type": "text", "x": 600, "y": 480, "text": "HTTP 端到端 65–83 ms（含 multipart 上传）；14 个视觉模型里最快 emotion 只要 7.1 ms", "fontSize": 15 }
+  ]
+}

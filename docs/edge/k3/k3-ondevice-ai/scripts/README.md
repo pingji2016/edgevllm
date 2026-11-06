@@ -15,6 +15,9 @@
 | `rag.py` | **本地 RAG**：embed → 余弦 → rerank → LLM 全离线 | 网关 embed/rerank/llm + python3 |
 | `tts-voices.sh` | **TTS 音色/语速验证**（含 md5 比对，会暴露参数 bug） | 网关 `/v1/tts/*` |
 | `asr-length.sh` | **ASR 长度-吞吐曲线**（证明长音频要 VAD 切段） | 网关 `/v1/asr/recognize`、`/v1/vad/*` |
+| `vision-concurrency.sh` | **视觉并发放大曲线**：1/2/4/8 路，看单帧延迟是否退化、吞吐在哪饱和（26.6 次/秒） | 网关 `/v1/vision/*` |
+| `vision-cpu-ep.sh` | **CPU EP 线程数对照**：证明 RISC-V 上通用 ONNX 路径加线程没用（1/2/4/8 = 860/820/840/943 ms） | `onnxruntime_perf_test` |
+| `net-baseline.sh` | **网络基线**：RTT / 上行 / 下行，用来算"端侧 vs 云端"的账（视频 7.7 Mbps 传不动） | `ping`、`curl` |
 | `long-transcribe.py` | **长音频转写 → SRT 字幕**：VAD 切段 → 合并到 ~12s → 逐块 ASR（比整段快 9×） | 网关 VAD + ASR、python3 |
 | `stream-asr.py` | **流式 ASR 客户端**（WebSocket，实测是缓冲式、不出增量 partial） | 网关 `/v1/asr/stream`、python3 `websockets` |
 | `stream-tts.py` | **流式 TTS 客户端**：按句 `append` 才真流式（每句 ~0.5s 出声） | 网关 `/v1/tts/stream`、python3 `websockets` |
