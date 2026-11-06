@@ -821,3 +821,11 @@ Mage-VL **一次只能吃一张图**，于是给了两种模式：
   无 `.git-credentials`、无 shell history 残留）。
 
 → 建议顺序：**隧道恢复 → 补完本轮板上实测并推送 → 删 `/root/.github-token` 并在 GitHub 后台 Revoke → 轮换 Xray UUID**。
+
+## 15. 相关文档（2026-11-06 追加）
+
+| 文档 | 内容 |
+| --- | --- |
+| [`spacemit-issues.md`](spacemit-issues.md) | 厂方可提交 issue 清单（14 条，含内核、RVV、PMU、JPEG 硬编等） |
+| [`forum-verify-log.md`](forum-verify-log.md) | 官方论坛帖逐条实测（t/1465、t/1716、t/935、t/1127 等） |
+| [`nano-vllm-cpu.md`](nano-vllm-cpu.md) | **把 nano-vllm 移植到 RISC-V CPU**：Qwen3-0.6B，prefill 29 tok/s、decode 1.27 tok/s（bs=1）/ 3.43 tok/s（bs=4），附 427 行补丁 |
