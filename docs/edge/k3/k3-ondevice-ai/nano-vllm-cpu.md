@@ -28,10 +28,10 @@
 | --- | ---: | ---: | ---: |
 | nano-vllm（本项目移植，fp32） | 29 tok/s | 1.31 tok/s | 2.4 GB |
 | llama.cpp SpaceMIT 版（Q8_0，8 线程） | **28.7 tok/s** | **18.3 tok/s** | 0.60 GB |
-| ORT + SpaceMiT EP（真实形状微基准外推） | ~107 tok/s | ~9.7 tok/s | 2.4 GB |
+| ORT + SpaceMiT EP（同形状合成图，冷权重实测） | ~107 tok/s | **9.0 tok/s** | 2.4 GB |
 
 **prefill 三方基本一致，差距全在 decode**：nano-vllm 每 token 只有 3.1 GB/s 的
-有效权重带宽，llama.cpp 是 11.0 GB/s，SpaceMiT EP 单算子能到 24 GB/s。
+有效权重带宽，llama.cpp 是 11.0 GB/s，SpaceMiT EP 冷权重能到 **21.4 GB/s**。
 换句话说，**K3 硬件没问题，是 torch 的 fp32 GEMV 内核没吃满带宽**。
 
 放在一起看会更清楚：
@@ -216,11 +216,45 @@ q 2048 / kv 1024、intermediate 3072、28 层）：
 对照我们的 nano-vllm 实测（1.31 tok/s）：**EP 理论上能快 5–7×**，
 和 llama.cpp Q8_0 的 18.3 tok/s 在一个量级（考虑 Q8 是 1/4 权重流量）。
 
-**必须说清楚的两个局限**：
+**但上面这些是"热权重"数字**（同一权重反复跑会命中缓存）。为了拿到真实值，又做了
+**冷权重实验**：用 onnx Python API 造一条 28 层的 GEMV 链，每层参数形状与
+Qwen3-0.6B 完全一致（15.7M params/层），每层权重互不相同、总流量 2.38 GB/token，
+权重放 external data 文件里**只读一遍**，所以无论缓存多大都作弊不了：
 
-1. 这是**单算子微基准**，同一个权重反复跑会命中缓存，所以 24 GB/s 是乐观值；
-   真实整网 decode 受 DRAM 冷读限制，估计落在 5–8 tok/s，而不是 9.7。
-2. 整网 EP 没能实测，因为 `torch.onnx.export` 挂了。
+| 图 | 权重/token | SpaceMiT EP | CPU EP |
+| --- | ---: | ---: | ---: |
+| 3 层链 | 0.19 GB | 10.5 ms（18.0 GB/s） | 36.3 ms（5.2 GB/s） |
+| 28 层链 | 1.63 GB | **89.0 ms（18.3 GB/s）** | 443.8 ms（3.7 GB/s） |
+| 35 层链 | 2.21 GB | 114.9 ms（19.2 GB/s） | — |
+| 28 层 + lm_head | 2.38 GB | **111 ms（21.4 GB/s）** | 640 ms（3.7 GB/s） |
+
+EP 稳定在 **18–21 GB/s**（STREAM 是 22 GB/s，即 83–97%），而且把 1350 个节点
+融合成 **6 个** op；CPU EP 只有 3.7 GB/s。折算到 Qwen3-0.6B 的 decode：
+
+| 方案 | 等效 decode |
+| --- | ---: |
+| nano-vllm（torch fp32） | 1.31 tok/s |
+| ORT CPU EP | **1.56 tok/s** |
+| ORT + SpaceMiT EP | **9.0 tok/s** |
+| llama.cpp Q8_0（8 线程） | 18.3 tok/s |
+
+结论修正：EP 整网 decode **≈ 9 tok/s**（不是乐观的 9.74，也不是保守的 5–8），
+是 torch 的 **6.9×**；llama.cpp 靠 Q8 量化（1/4 流量）仍然快 2 倍。
+
+**踩到的坑（已并入 issue 第 15 条）**：`import spacemit_ort` 必须写在
+`import onnxruntime` **之后**，否则 `InferenceSession()` 直接 SIGSEGV：
+
+```python
+import spacemit_ort          # 先 → 段错误（3/3 复现）
+import onnxruntime as ort
+# ---- 反过来就正常（3/3）----
+import onnxruntime as ort
+import spacemit_ort
+```
+
+这个坑很阴：崩在 C++ 里、没有任何错误信息、和模型大小/图结构都无关，
+一度让我误判成"2 GB 以上模型 EP 跑不了"。**整网 EP 仍然没有实测**——
+真实权重导不出来（`torch.onnx.export` 挂了），上面用的是同形状合成图。
 
 ## bf16 试过了，不值得
 
@@ -276,6 +310,16 @@ EP 单算子微基准（`scripts/ep_shapes.py`，用 onnx Python API 手工构�
 ```bash
 python3 scripts/ep_shapes.py    # 打印 EP vs CPU 的 GFLOPS 与加速比
 ```
+
+EP 冷权重实验（`scripts/synth_gemv2.py`，2.25 GB/token 的合成 GEMV 链）：
+
+```bash
+# 权重流式写 external data，proto 只有 KB 级，python 峰值内存 < 100 MB
+python3 scripts/synth_gemv2.py 28    # 28 层 + lm_head
+```
+
+> ⚠️ 脚本里 `import onnxruntime` 必须写在 `import spacemit_ort` **之前**，
+> 否则见 [`spacemit-issues.md`](spacemit-issues.md) Issue 15（必崩 SIGSEGV）。
 
 ## 关于 LiteRT / vLLM
 

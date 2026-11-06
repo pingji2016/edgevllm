@@ -608,6 +608,37 @@ ffmpeg -nostdin -f lavfi -i testsrc2=size=1280x720:rate=30 -t 2 \
 **影响**：用 ffmpeg 硬编做录制/推流的用户会得到"码率调了没用"或"编码器不可用"，
 两种情况都没有明确错误信息。
 
+## Issue 15（严重）`import spacemit_ort` 早于 `import onnxruntime` 时，`InferenceSession()` 必然段错误
+
+**组件**：`onnxruntime 1.24.2+spacemit.a1`（SpaceMiT EP）
+
+```python
+# ❌ 段错误（3/3 复现，exit 139，无任何错误信息）
+import spacemit_ort
+import onnxruntime as ort
+s = ort.InferenceSession("model.onnx",
+                         providers=["SpaceMITExecutionProvider", "CPUExecutionProvider"])
+# Segmentation fault (core dumped)
+
+# ✅ 正常（3/3）
+import onnxruntime as ort
+import spacemit_ort
+s = ort.InferenceSession("model.onnx", providers=[...])
+```
+
+- 同一模型、同一进程参数，**只改两行 import 的顺序**，结果从必崩变成必过；
+- 和模型大小、图结构、外部数据、`ulimit` 都无关（一度被误判成
+  「>2 GiB 模型 EP 跑不了」，实际是我们脚本写成了 EP-first）；
+- 进程崩在 C++ 层，python 侧连异常都拿不到，只能看到 `Segmentation fault`。
+
+**影响**：官方文档/示例里 `import spacemit_ort` 通常写在最前面（「先 import 才能用
+EP」），但**照抄这个顺序就会崩**。对不了解内情的人是纯粹的"玄学段错误"，
+排查成本极高（我们花了十几轮实验才定位）。
+
+**期望**：EP 的 python 包在被早于 ort 导入时，要么自己先 `import onnxruntime`
+（把依赖显式化），要么 `InferenceSession` 时抛一个明确的 `RuntimeError`，
+而不是直接 SIGSEGV。
+
 ---
 
 ## 附：正向结论（一并反馈）
@@ -617,6 +648,10 @@ ffmpeg -nostdin -f lavfi -i testsrc2=size=1280x720:rate=30 -t 2 \
 - **VAD**：10s 音频 **288ms**（34× 实时）。
 - **TTS 流式**：按句 append 每句 ~0.5s 出声，是整套栈里最好用的一块。
 - **A100 的正确定位**：int8/IME 算子专用核；`/proc/set_ai_thread` 一行即可切换，机制本身很干净。
+- **EP 的 GEMV 带宽**：冷权重（external data 只读一遍、无法命中缓存）下
+  **18–21 GB/s**，达到 STREAM（22 GB/s）的 83–97%，且能把 1350 节点融合成 6 个 op；
+  折算 Qwen3-0.6B fp32 整网 decode ≈ **9 tok/s**（同图 CPU EP 只有 1.56 tok/s）。
+  这是 K3 上跑 LLM 最有希望的路径。
 - **EP 的 Clip / 5 维输入**：Bianbu 4.0.8 + `libspacemit_ep.so.2.0.6` 上，4D/5D、
   opset 6/13、标量/`[1]` 张量 min/max 全部正常；论坛 t/1762 的
   OpenHarmony 崩溃在我们这套上不复现（疑似 OH 侧 EP 是另一个构建）。
