@@ -17,6 +17,7 @@
 | --- | --- |
 | [`environment.md`](environment.md) | 完整环境清单：磁盘/网络/GPU 驱动/Python(uv)/Java/代理/大模型/出图/3D，14 节 |
 | [`3d-gaussian-splatting.md`](3d-gaussian-splatting.md) | 3D 高斯泼溅专题：环境、用法、实测、10 个坑、能力边界 |
+| [`camera-ai-filter.md`](camera-ai-filter.md) | K3/手机摄像头 → 逐帧 AI 滤镜（检测/背景替换/动漫/扩散），含实测与踩坑 |
 | [`disk-safety.md`](disk-safety.md) | 双系统机器上"NVMe 盘只读"的红线与自查方法 |
 
 ## 实测摘要
@@ -54,6 +55,20 @@
 ![frame 2](assets/lego_frame_02.png)
 
 转台视频：[`assets/lego_turntable.mp4`](assets/lego_turntable.mp4)
+
+### 摄像头 AI 滤镜（K3 + 手机摄像头）
+
+| 模式 | 推理/帧 | 输出 FPS | 显存 |
+| --- | ---: | ---: | ---: |
+| detect（YOLO11n） | 6.7 ms | 16.7（源上限） | 404 MiB |
+| replace（分割换背景） | 21.1 ms | 16.75 | 442 MiB |
+| blur（分割虚化） | 49.5 ms | 16.65 | 442 MiB |
+| anime（AnimeGANv2） | 93.9 ms | 10.0 | 890 MiB |
+
+链路：摄像头 → K3（MJPEG 8090）→ 千兆直连网线 → GPU 逐帧推理 → MJPEG 8091
+
+> K3 的 USB 带宽只够跑一路摄像头（两路同时开会 `ENOSPC`），所以用
+> `cam_select.sh usb|phone` 切换；手机作为 UVC 摄像头时只有 640×480@30。
 
 ---
 
