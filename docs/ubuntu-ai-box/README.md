@@ -20,6 +20,7 @@
 | [`camera-ai-filter.md`](camera-ai-filter.md) | K3/手机摄像头 → 逐帧 AI 滤镜（检测/背景替换/动漫/扩散），含实测与踩坑 |
 | [`disk-safety.md`](disk-safety.md) | 双系统机器上"NVMe 盘只读"的红线与自查方法 |
 | [`minimind-training.md`](minimind-training.md) | 从零训一个 30M 小模型：预训练 2.8 h / SFT 1.8 h，含吞吐实测与 CPU 上的 DDP 验证 |
+| [`inference-acceleration.md`](inference-acceleration.md) | 推理加速三轮实测：量化七档 / KV 压缩 / 投机解码，全部带数字与负结果 |
 
 ## 实测摘要
 
@@ -82,6 +83,18 @@
 | 预训练吞吐（batch 24 × seq 512） | **65,234 tok/s** |
 | 权重文件 | 66.6 MB / 个（bf16） |
 | 能力 | 会写代码、会自我介绍；**算不对 1+1** |
+
+---
+
+### 推理加速实测（Qwen3 + llama.cpp / transformers）
+
+| 项目 | 实测结论 |
+| --- | --- |
+| 量化梯度（1.7B，F16→Q2 七档） | **Q4_K_M 最快：221.8 tok/s（F16 的 2.24×）**；Q2_K PPL +413% 不可用 |
+| F16 有效带宽 | **402 GB/s = 448 GB/s 的 90%**（证明是带宽墙） |
+| KV 压缩（kvpress，8K 上下文） | SnapKV@75% 省 12.6% 显存且检索不掉，但 **decode 速度几乎不变** |
+| 投机解码（4 种实现） | 全部负收益 **0.53–0.73×**（接受率 67% 也没救回来） |
+| 跨引擎对照（同模型同精度） | transformers 36.1 tok/s vs llama.cpp **98.8 tok/s（2.7×）** |
 
 ---
 

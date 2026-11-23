@@ -108,3 +108,25 @@ DDP_CPU=1 OMP_NUM_THREADS=4 ../.venv/bin/torchrun --nproc_per_node 2 --standalon
 本机实测：200 条样本 / 25 步，loss 8.85 → 8.27，29.9 s（857 tok/s）。
 同配置单卡 GPU（nccl）为 13.0 s（1,968 tok/s）—— 这组对比只说明两条路径都通，
 seq 128 / batch 4 时启动开销占了大头，不代表真实速度比。
+
+---
+
+## 4. 推理加速实验脚本（路线 A/B/C）
+
+对应 [inference-acceleration.md](../inference-acceleration.md)。四个脚本顶部有硬编码的模型路径
+（本机 `~/.cache/modelscope/...`），换机器需要改。
+
+| 脚本 | 内容 | 依赖 |
+| --- | --- | --- |
+| `routeA_quant.py` | transformers + bitsandbytes 对比 BF16 / INT8 / NF4 | transformers、bitsandbytes |
+| `routeB_kv.py` | kvpress 的 7 种 KV 压缩策略 × 多档上下文（大海捞针） | transformers、kvpress |
+| `routeC_spec.py` | 投机解码：0.6B 草稿 + 1.7B 靶（bf16 草稿） | transformers |
+| `routeC_spec_nf4.py` | 同上，草稿换成 NF4 4-bit | transformers、bitsandbytes |
+
+```bash
+python routeB_kv.py          # 模型路径见脚本顶部常量
+CTX_LENS=2000,8000,16000 python routeB_kv.py
+```
+
+> 量化梯度（GGUF 七档）与投机解码的 llama.cpp 那一组用的是命令行工具，
+> 完整命令见 [inference-acceleration.md](../inference-acceleration.md) 的「复现命令」一节。

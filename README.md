@@ -78,7 +78,9 @@
 - [docs/ubuntu-ai-box/](docs/ubuntu-ai-box/) —— 一台 16 GB 显存的本地 AI 工作站（实测记录）
 
   RTX 5060 Ti 上的真实数据：llama.cpp 大模型、ComfyUI 出图、3DGS 重建、摄像头逐帧滤镜，
-  以及**从零训练 30M 小模型**（[minimind-training.md](docs/ubuntu-ai-box/minimind-training.md)：
+  以及**推理加速实测**（[inference-acceleration.md](docs/ubuntu-ai-box/inference-acceleration.md)：
+  量化七档 / KV 压缩 / 投机解码，含 2.7× 引擎差距这类硬数字）、
+  **从零训练 30M 小模型**（[minimind-training.md](docs/ubuntu-ai-box/minimind-training.md)：
   预训练 2.8 h / SFT 1.8 h、吞吐 65k tok/s、DDP 正确性在 CPU 上先验完）。从
   [README](docs/ubuntu-ai-box/README.md) 开始。
 
