@@ -148,6 +148,8 @@ cd ~/apps/minimind/trainer
 其中第 2 项是最关键的：**DDP 的 AllReduce 求平均，数值上等于「把 N 张卡的样本拼成一个大 batch 做梯度」**，
 1e-8 的残差只是 float32 累加顺序不同。
 
+> 配套脚本：[`scripts/ddp_cpu_check.py`](scripts/ddp_cpu_check.py)——可直接跑，用法与预期输出见 [scripts/README.md](scripts/README.md)。
+
 ### 6.3 需要给训练脚本打的小补丁
 
 仓库原始代码把分布式写死成了 GPU：
@@ -185,6 +187,8 @@ def distributed_uses_cuda():
    表现为 **loss 突然跳变**。跨 world_size 不要用旧 checkpoint 续训。
 3. **4090/5060 Ti 没有 NVLink**，卡间走 PCIe；30M 小模型每步 AllReduce 约 120 MB（fp16 梯度 × 2），
    实测加速比预期 **1.8–1.9x** 而不是 2x（估算，待真实双卡验证）。
+
+双卡启动器：[`scripts/run_ddp_2gpu.sh`](scripts/run_ddp_2gpu.sh) —— 自动按 √N 缩放 lr，支持 `TASK=sft`，路径通过 `MINIMIND` 指定。
 
 ---
 
@@ -225,9 +229,9 @@ DDP_CPU=1 OMP_NUM_THREADS=4 ../.venv/bin/torchrun --nproc_per_node 2 \
   --standalone train_pretrain.py --device cpu \
   --hidden_size 512 --batch_size 4 --max_seq_len 128 --epochs 1
 
-# 5. 租到双卡后
-bash run_ddp_2gpu.sh                       # 预训练，等效 batch 384
-TASK=sft bash run_ddp_2gpu.sh              # SFT
+# 5. 租到双卡后（脚本在本目录 scripts/ 下）
+MINIMIND=~/apps/minimind bash scripts/run_ddp_2gpu.sh            # 预训练，等效 batch 384
+MINIMIND=~/apps/minimind TASK=sft bash scripts/run_ddp_2gpu.sh   # SFT
 ```
 
 ### 产物对照
