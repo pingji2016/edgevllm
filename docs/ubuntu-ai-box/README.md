@@ -19,6 +19,7 @@
 | [`3d-gaussian-splatting.md`](3d-gaussian-splatting.md) | 3D 高斯泼溅专题：环境、用法、实测、10 个坑、能力边界 |
 | [`camera-ai-filter.md`](camera-ai-filter.md) | K3/手机摄像头 → 逐帧 AI 滤镜（检测/背景替换/动漫/扩散），含实测与踩坑 |
 | [`disk-safety.md`](disk-safety.md) | 双系统机器上"NVMe 盘只读"的红线与自查方法 |
+| [`minimind-training.md`](minimind-training.md) | 从零训一个 30M 小模型：预训练 2.8 h / SFT 1.8 h，含吞吐实测与 CPU 上的 DDP 验证 |
 
 ## 实测摘要
 
@@ -72,6 +73,18 @@
 
 ---
 
+### 小模型从零训练（minimind 30M）
+
+| 项 | 实测 |
+| --- | ---: |
+| 预训练 30.03 M 参数 / 2 epochs | **2.8 小时**，loss 2.7 → 2.02 |
+| SFT / 1 epoch（lr 1e-4） | **1.8 小时**，loss 1.9 → 1.4 |
+| 预训练吞吐（batch 24 × seq 512） | **65,234 tok/s** |
+| 权重文件 | 66.6 MB / 个（bf16） |
+| 能力 | 会写代码、会自我介绍；**算不对 1+1** |
+
+---
+
 ## 最有价值的几条经验
 
 1. **Blackwell（sm_120）不是"装上就能用"**
@@ -99,6 +112,11 @@
 6. **Qwen3 默认开思考模式**
    API 调用不加 `{"chat_template_kwargs": {"enable_thinking": false}}`，
    token 全花在 `reasoning_content`，`content` 返回空。
+
+7. **多卡训练先验逻辑，再验速度**
+   在 CPU 上用 gloo 跑双进程，就能验证「梯度同步 / 参数同步 / 数据分片」三件事，
+   零成本；租卡之后只剩下速度和通信开销要看。详见
+   [`minimind-training.md`](minimind-training.md) 第 6 节。
 
 ---
 
