@@ -21,6 +21,7 @@
 | [`disk-safety.md`](disk-safety.md) | 双系统机器上"NVMe 盘只读"的红线与自查方法 |
 | [`minimind-training.md`](minimind-training.md) | 从零训一个 30M 小模型：预训练 2.8 h / SFT 1.8 h，含吞吐实测与 CPU 上的 DDP 验证 |
 | [`inference-acceleration.md`](inference-acceleration.md) | 推理加速三轮实测：量化七档 / KV 压缩 / 投机解码，全部带数字与负结果 |
+| [`capability-internals.md`](capability-internals.md) | Wav2Lip / InsightFace / SDXL-LoRA 三项的内部原理与架构（含公式、踩坑、实测） |
 
 ## 实测摘要
 
