@@ -156,4 +156,17 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 
 > vLLM 相关脚本需要 `ninja` 在 PATH 中、并设 `CUDA_HOME=/usr/local/cuda`
 > （CUDA 13 的头文件在 `targets/x86_64-linux/include`，
-> 否则 fp8/量化路径会以 `FileNotFoundError: 'ninja'` 或找不到 `cuda_runtime.h` 失败）。
+> 否则 fp8/量化路径会以 `FileNotFoundError: 'ninja'` 或找不到 `cuda_runtime.h` 失败）。\n
+---
+
+## 6. 实时链路脚本（流式 ASR / VLM / SAM2 / CosyVoice）
+
+对应 [realtime-services.md](../realtime-services.md)。
+
+| 脚本 | 用途 |
+| --- | --- |
+| `stream_asr.py` | 滚动窗口流式 ASR，测更新延迟与 RTF |
+| `vl_direct.sh` | 打常驻 vlm-server（8092），逐帧测 VLM 延迟 |
+| `sam2_test.py` | SAM2 hiera-tiny 点提示分割，测单帧耗时 |
+| `cosy_asr.py` | ASR 回听工具（字符级相似度判卷） |
+| `cosy_diag2.py` | CosyVoice2 分环节诊断（精度/前端/LLM） |
