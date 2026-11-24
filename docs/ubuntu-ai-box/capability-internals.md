@@ -325,3 +325,43 @@ unzip -q -o /tmp/buffalo_l.zip -d ~/.insightface/models/buffalo_l
 STEPS=30 RES=512 ~/apps/bench/yolo-venv/bin/python ~/apps/infer-research/lora_min.py
 ~/apps/bench/yolo-venv/bin/python ~/apps/infer-research/lora_infer.py
 ```
+
+---
+
+## 六、附：语音闭环实测（TTS → 唇形 → ASR）
+
+把三个环节串起来验证自洽性：**CosyVoice 合成语音 → Wav2Lip 生成对口型视频 → ASR 转写回文字**，
+转写结果与原文一致，说明链路没有"悄悄坏掉"。
+
+用 `faster-whisper-small`（CTranslate2）测转写：
+
+| 音频 | 设备 | 转写耗时 | RTF | 等效速度 |
+| --- | --- | ---: | ---: | ---: |
+| 3.48 s（zero_shot_prompt） | CUDA fp16 | 2.29 s | 0.659 | 1.5× 实时 |
+| 3.48 s | CPU int8 | 3.47 s | 0.997 | 1.0× 实时 |
+| **13.75 s**（cross_lingual_prompt） | **CUDA fp16** | **0.39 s** | **0.029** | **34.9× 实时** |
+| 13.75 s | CPU int8 | 4.45 s | 0.323 | 3.1× 实时 |
+
+转写文本（两段音频、两种设备输出完全一致）：
+
+> 3.48 s：希望你以後能夠做得比我還好
+> 13.75 s：在那之后完全收购那家公司因此保持管理层的一致性利益与即将加入家族的资产保持一致这就是我们有时不买下全部的原因
+
+**三个结论：**
+
+1. **短音频被固定开销主导**：3.48 s 时 GPU 只有 0.66 RTF，因为预热/调度/编码开销占比大；
+   换成 13.75 s，GPU 立刻到 **34.9× 实时**（0.39 s）。
+2. **CPU 的 RTF 基本恒定**（0.997 → 0.323），因为 CPU 上是纯算力线性关系，没有这类固定开销问题。
+3. **GPU 相对 CPU 约 11×**（0.39 s vs 4.45 s，同一段音频）。
+
+**两个坑：**
+
+1. **`libcublas.so.12` 缺失**：本机是 CUDA 13（只有 `.so.13`），而 CTranslate2 需要 cu12。
+   解法是把别的 venv（minimind 的 torch cu128）自带的 cu12 库加进搜索路径：
+   ```bash
+   LIBS=$(ls -d ~/apps/minimind/.venv/lib/python3.12/site-packages/nvidia/*/lib | tr '\n' ':')
+   LD_LIBRARY_PATH=$LIBS python asr_fw.py
+   ```
+2. **PyAV 版本不兼容**：`faster-whisper` 内部 `av.open(..., metadata_errors=...)` 在新 PyAV 上失效，
+   表现为 `TypeError: open() got an unexpected keyword argument 'metadata_errors'`。
+   解法：用 `soundfile` 自己解码 + 线性重采样到 16 kHz，把 numpy 数组直接传给 `transcribe()`。
