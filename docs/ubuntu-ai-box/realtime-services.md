@@ -134,6 +134,43 @@ diffusers 0.29.0`，本机是 2.15 / 2.11 / 0.42。
 
 **结论**：这个能力项要可用，必须**独立 venv + 严格锁版本**，不要在通用环境里跑。
 
+
+### 4.4 深挖结果（2026-11-24 追加）：排除了 4 个因素，缩小到声学栈
+
+按"二分法"逐个排除，每一步都用 ASR 回听 + 字符相似度判卷：
+
+| 步骤 | 做法 | 结果 | 结论 |
+| --- | --- | --- | --- |
+| 1 | 修 `load_wav` 重采样（`F.interpolate` → `librosa.resample(soxr_hq)`） | 输出语言从**德语/荷兰语**变回**中文** | ✅ 重采样 aliasing 是真 bug，已修 |
+| 2 | 换用官方干净权重 `iic/CosyVoice2-0.5B`（5.3 GB） | 仍是同一段乱码（"妖物化用了阿神"，1.92 s） | ❌ 不是模型文件被拼坏 |
+| 3 | 用 VC 分支（`source_speech_token`）**跳过 LLM** | 仍是乱码 | ❌ 不是 LLM 的问题 |
+| 4 | 文本 tokenizer 自检（encode→decode 往返） | 完全一致；frontend 产出的 token 与复算一致 | ❌ 不是文本前端 |
+| 5 | speech token 统计 | 87 个 token、范围 74–6486（< 词表 6561）、33 ms/token | ✅ 语音 token 正常 |
+
+**结论：问题在声学栈（speech tokenizer → flow → hift）或注意力实现，**
+与文本、LLM、模型文件、重采样都无关。
+
+一条重要线索：加载时 transformers 报
+
+```
+Sliding Window Attention is enabled but not implemented for `sdpa`; unexpected results may be encountered.
+```
+
+换 `attn_implementation="eager"` 后变成 `not implemented for eager` ——
+说明该模型的 sliding-window 配置在当前 transformers 里**没有可用实现，会静默给出错误结果**。
+这与"音频长度正常但内容乱码"的现象高度吻合。
+
+### 4.5 最终建议（按成本排序）
+
+1. **官方 Docker 镜像**（最省事）：`docker pull funasr/cosyvoice`，环境由上游锁定。
+2. **严格锁版本的独立 venv**：`torch==2.3.1 / torchaudio==2.3.1 / transformers==4.40 / diffusers==0.29 / onnxruntime-gpu`。
+   注意本机 CUDA 13 与这些老版本不兼容，需要单独的 CUDA 12.x 运行时。
+3. 本机现成的 `~/apps/cosy-env`（transformers 4.51 + diffusers 0.29 + 借用 torch 2.15）
+   已能跑通流程，但**内容仍不可用**，不建议直接使用。
+
+> 一句话：CosyVoice2 在本机能"出声"，但**不能"说对"**；
+> 它需要一颗被上游验证过的软件栈，而不是一个更聪明的补丁。
+
 ---
 
 ## 5. MInference / TensorRT-LLM
