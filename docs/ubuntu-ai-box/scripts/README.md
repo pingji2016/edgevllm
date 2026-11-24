@@ -130,3 +130,27 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 
 > 量化梯度（GGUF 七档）与投机解码的 llama.cpp 那一组用的是命令行工具，
 > 完整命令见 [inference-acceleration.md](../inference-acceleration.md) 的「复现命令」一节。
+
+---
+
+## 5. 第二～六轮实验脚本
+
+对应 [inference-acceleration.md](../inference-acceleration.md) 的 D–R 节。全部硬编码本机路径，
+换机器需改脚本顶部的模型路径常量。
+
+| 脚本 | 实验 | 依赖 |
+| --- | --- | --- |
+| `constrained_decode.py` | 约束解码（xgrammar 强制 JSON Schema）vs 自由生成 | transformers、xgrammar |
+| `flex_compiled.py` | FlexAttention 滑窗 mask vs SDPA（含 torch.compile） | torch ≥ 2.5 |
+| `wanda.py` | Wanda 剪枝（\|W\|×‖X‖ 打分，稀疏度扫描） | transformers |
+| `quarot2.py` | QuaRot 旋转量化（Hadamard + 折叠 RMSNorm + RTN） | transformers |
+| `r3_fp8_kivi.py` | torchao FP8 三种配置 / KIVI 式 KV 量化 | transformers、torchao |
+| `vllm_test.py` | vLLM 单流与 8 并发基线 | vllm |
+| `vllm_extra.py` | vLLM 并发曲线 + ngram 投机 | vllm |
+| `kv_fp8.py` | vLLM KV cache fp8 对比 | vllm |
+| `prefill_curve.py` | 长上下文 prefill 曲线（**必须关前缀缓存**） | vllm |
+| `gptq_test.py` | GPTQ-Int8 权重 + ngram 投机叠加 | vllm |
+
+> vLLM 相关脚本需要 `ninja` 在 PATH 中、并设 `CUDA_HOME=/usr/local/cuda`
+> （CUDA 13 的头文件在 `targets/x86_64-linux/include`，
+> 否则 fp8/量化路径会以 `FileNotFoundError: 'ninja'` 或找不到 `cuda_runtime.h` 失败）。

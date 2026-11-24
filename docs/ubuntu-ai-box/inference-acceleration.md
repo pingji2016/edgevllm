@@ -2,7 +2,6 @@
 
 > 机器 `pingji-MS-7B89` · RTX 5060 Ti 16 GB（sm_120 / 36 SM / **448 GB/s**）· Ubuntu 26.04
 > 实测时间：2026-11-23 · 全部数字为本机实跑
-> 脚本：[`scripts/routeA_quant.py`](scripts/routeA_quant.py) · [`scripts/routeB_kv.py`](scripts/routeB_kv.py) · [`scripts/routeC_spec.py`](scripts/routeC_spec.py) · [`scripts/routeC_spec_nf4.py`](scripts/routeC_spec_nf4.py)
 > 测试条件：**`vlm-server` 全程占用 6.4 GB 显存**（可用 ~9.9 GB），未停服务
 
 ---
@@ -288,3 +287,317 @@ LayerSkip（零额外内存）。"再装一个小模型"这条路在带宽受限
 | 引擎 | SGLang vs vLLM 同机对照 | 未装（sm_120 安装有风险） |
 | 引擎 | exllamav2 源码精读 / TensorRT-LLM | 未开始 |
 | 端侧 | K3 上的投机解码 / 多模态流式 | 未开始 |
+
+---
+
+# 第二轮实测（2026-11-24）：约束解码 / FlexAttention / Wanda 剪枝
+
+> 条件同上（vlm-server 占 6.4 GB，未停）。模型 Qwen3-1.7B（约束解码/attention）与 0.6B（剪枝）。
+
+## D. 约束解码：xgrammar 强制 JSON Schema
+
+任务：从一句中文里抽取 `{company, year, products, confidence}` 四个字段，3 个 prompt。
+
+| 模式 | JSON 合法率 | 平均生成 token | 平均 tok/s | 平均总耗时 |
+| --- | :---: | ---: | ---: | ---: |
+| 自由生成 | **0/3** | 200（撞上限） | 38.5 | 5.08 s |
+| **xgrammar 约束** | **3/3** | **35** | 35.8 | **1.14 s** |
+
+**三个结论：**
+
+1. **合法率 0% → 100%**。自由生成其实写对了 JSON 内容，但会继续往下写
+   （把 JSON 包进 ```json 代码块后再开一个新对象），200 token 上限一到就被截断。
+2. **每 token 只慢 7%**（38.5 → 35.8 tok/s）：bitmask 施加的开销很小。
+3. **总耗时反而降 4.5 倍**（5.08 s → 1.14 s）：约束解码在 `}` 处立即停止，
+   不需要靠截断长度兜底。
+
+**公平性检查**：把自由生成的预算放宽到 512 token，它仍然不终止（继续输出第二个 JSON 块）。
+→ 说明这里的收益不是"我们给的预算太少"，而是**模型本身不知道该停在哪**。
+
+> 踩坑：`lm-format-enforcer` 与 transformers 5.x 不兼容（内部 `from transformers.tokenization_utils
+> import PreTrainedTokenizerBase` 已失效）。改用 **xgrammar**（vLLM / SGLang 用的是它），
+> 通过 `GrammarMatcher` + `apply_token_bitmask_inplace` 做成 LogitsProcessor 即可。
+
+## E. FlexAttention：滑窗 mask vs SDPA
+
+形状按 Qwen3-1.7B 的注意力（16 头 × 128 维，bf16）。
+
+| 序列长度 | SDPA(causal) | Flex **未编译** | Flex **编译后**(全因果) | Flex 编译后(滑窗1024) | 滑窗 vs SDPA |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2048 | 0.49 ms | 16.77 ms | 0.52 ms | 0.62 ms | 0.79× |
+| 4096 | 1.72 ms | 65.91 ms | 1.83 ms | **0.86 ms** | **2.00×** |
+| 8192 | 6.44 ms | — | 6.75 ms | **1.77 ms** | **3.64×** |
+
+**三个结论：**
+
+1. **必须 `torch.compile`**：不编译时 flex_attention 走数学回退（dense S²），
+   比 SDPA **慢 20–30 倍**（S=4096 时 65.91 ms vs 1.72 ms）。
+2. **编译后只在长序列划算**：S=2048 还没回本（0.79×），S=4096 起 2.00×，S=8192 达 **3.64×**。
+   交叉点 ≈ 2K–4K。
+3. **数值正确**：与显式 mask 的 SDPA 对比，max|Δ| = 1.56e-2（bf16 正常误差）。
+
+> 首次编译约 12–14 s，`mode="max-autotune"` 自动挑了 `triton_flex_attention_40`
+> （BLOCK_M=64, BLOCK_N=64, 28.67 ms 在 autotune 里最快）。
+
+## F. Wanda 剪枝（Qwen3-0.6B）
+
+打分 = `|W| × ||X||₂`（权重 × 校准激活范数），按输出通道保留 top-k。校准 8 段语料。
+
+| 稀疏度 | PPL | 相对基线 |
+| ---: | ---: | ---: |
+| 0% | 29.150 | — |
+| 20% | 29.412 | **+0.9%** |
+| 40% | 36.981 | +26.9% |
+| 50% | 52.736 | +80.9% |
+| 60% | 281.165 | +864.5% |
+
+**随机剪枝 50% 的 PPL = 1,780,737**（Wanda 同稀疏度是 52.7，差 **3.4 万倍**）。
+
+**三个结论：**
+
+1. **20% 稀疏几乎免费**（+0.9%），40% 起代价陡增，50% 已不可用，60% 彻底崩。
+2. **打分方式极其关键**：随机剪 50% 直接废掉，Wanda 只掉 81%。
+3. **剪枝不等于加速**：PyTorch 稠密实现下稀疏权重仍然是稠密 GEMM，
+   速度一点不涨（本实验 PPL 测量耗时 0.1–0.2 s 无变化）。
+   要变现必须靠 **2:4 结构化稀疏内核** 或专用硬件。
+
+## 本轮把清单补全到 13 项
+
+| 状态 | 项目 |
+| --- | --- |
+| ✅ 已跑（13 项） | 量化七档 ×2 模型、8B 基线、KV 压缩、投机解码 ×4 实现、跨引擎对照、bnb sm_120、**约束解码**、**FlexAttention**、**Wanda 剪枝**、DDP 验证 |
+| ⏸ 未跑 | AWQ/GPTQ/FP8 对照、QuaRot/SpinQuant、KIVI、稀疏注意力 MInference、SGLang vs vLLM、exllamav2/TensorRT-LLM、K3 端侧 |
+
+---
+
+# 第三轮实测（2026-11-24）：FP8 / KIVI / QuaRot / 引擎对比 / K3 端侧
+
+## G. FP8 量化（torchao，Qwen3-0.6B）
+
+| 配置 | PPL | decode tok/s | 峰值显存 |
+| --- | ---: | ---: | ---: |
+| bf16 | 29.150 | **38.9** | 1,833 MiB |
+| FP8 权重-only | 29.076（无损） | 20.4（**0.52×**） | 3,241 MiB |
+| FP8 动态激活+权重 | 29.470 | 10.9（**0.28×**） | 3,810 MiB |
+
+**结论：FP8 在 sm_120 上是负收益，而且显存还涨了。**
+torchao 的 weight-only 实现是「8bit 存储 + 每次前向反量化回 bf16」，
+既没省带宽（还是要读全量再展开），又多了 scale/dequant 开销。
+真正的 FP8 收益需要**原生 FP8 GEMM 内核**（cutlass/cuBLASLt 的 scaled_mm），
+在 HF 这套前向里用不上。
+
+## H. KIVI 式 KV 量化（Qwen3-1.7B，8K 上下文大海捞针）
+
+| KV 位宽 | 原始 | 量化后（理论） | 检索 |
+| --- | ---: | ---: | :---: |
+| 16bit | 767.5 MiB | 767.5 MiB | ✅ |
+| 8bit | 767.5 MiB | 383.7 MiB | ✅ |
+| **4bit** | 767.5 MiB | **191.9 MiB** | ✅ |
+| 2bit | 767.5 MiB | 95.9 MiB | ❌（输出崩坏） |
+
+**结论：KV 压到 4bit 仍能正确检索，2bit 崩。**
+注意本实验是「量化后立刻反量化」，测的是**精度影响**，不是实际显存占用
+（真正省显存需要量化存储格式 + 量化注意力内核）。
+
+## I. QuaRot（旋转量化）验证（Qwen3-0.6B，4bit RTN）
+
+先把 RMSNorm 的 per-channel 权重折进相邻线性层，再用 Hadamard 旋转残差流
+（读残差流的层 `W←WR`，写残差流的层 `W←RᵀW`，embedding `E←ER`），
+最后做 4bit RTN。
+
+| 配置 | PPL | 相对 bf16 |
+| --- | ---: | ---: |
+| bf16 | 29.150 | — |
+| 折 norm + 旋转（未量化，验证等价性） | 29.076 | **-0.3%** ✅ 变换无损 |
+| 不旋转 · 逐通道 | 422.421 | +1349% |
+| **旋转 · 逐通道** | **167.336** | +474% |
+| 不旋转 · group128 | 156.018 | +435% |
+| **旋转 · group128** | **79.403** | **+172%** |
+
+**三个结论：**
+
+1. **旋转本身是精确变换**：未量化时 PPL 从 29.150 → 29.076（-0.3%，bf16 噪声级）。
+2. **旋转确实改善 4bit 量化**：逐通道 422→167（**2.5×**），group128 156→79（**2.0×**）。
+3. **但不折 norm 会误判**：单独折 RMSNorm 权重（不旋转）会让纯 RTN 从 75 恶化到 422，
+   因为 γ 抬高了通道间尺度差异。必须「折 norm + 旋转」一起做才有意义 ——
+   我第一次就是拿「未折 norm 的 RTN」和「折了 norm 的旋转版」比，得出过错误结论。
+
+> 绝对精度仍差（+172%），因为缺 QuaRot 论文里的两件事：head 维度旋转 + GPTQ 误差补偿。
+
+## J. 推理引擎对比（同一模型 Qwen3-1.7B，同一张卡）
+
+| 引擎 | 单请求 tok/s | 8 并发合计 | 状态 |
+| --- | ---: | ---: | --- |
+| transformers (sdpa, bf16) | 36.1 | — | ✅ |
+| llama.cpp (Vulkan, F16) | **98.8** | — | ✅ |
+| **vLLM 0.34.0** | 63.3 | **481.0** | ✅ 首次加载 140 s |
+| SGLang 0.5.23 | — | — | ❌ 未跑通 |
+
+**结论：**
+
+1. **vLLM 能在 sm_120 上跑**（预编译轮子，`enforce_eager=True` 避开 CUDA graph 编译）。
+2. **单流最快仍是 llama.cpp**（98.8，用满 90% 带宽）；vLLM 单流 63.3。
+3. **但并发是 vLLM 的地盘**：8 路并发 481 tok/s，是单流的 7.6 倍 —— 连续批处理补齐了带宽缺口。
+4. **SGLang 在本机跑不通**：flashinfer 编译过关后，卡在 `sgl_kernel` 的 JIT，
+   报 `rsqrt` exception specification 冲突（CUDA 13.0 的 `math_functions.h` 与
+   Ubuntu 26.04 的 glibc 头不兼容）。用 `-ccbin g++-14` 也没绕过。
+
+## K. K3 端侧基线（RISC-V，8 核，15.9 GB）
+
+| 模型 | 测法 | pp32 | tg16 |
+| --- | --- | ---: | ---: |
+| qwen3 4B Q4_K_M（2.52 GiB） | llama-bench，16 线程 | **5.58 tok/s** | **3.29 tok/s** |
+
+对比 5060 Ti 同尺寸模型（4B Q4 约 145 tok/s）→ **K3 慢约 44 倍**。
+
+**两个踩到的坑：**
+
+1. K3 上的 llama.cpp 是 **SpacemiT 定制版**（`use_ime2=1`，16 线程 = 8 性能核 + 8 AI 核），
+   支持 **9 种投机解码**：`draft-simple / draft-eagle3 / draft-mtp / draft-dflash /
+   ngram-simple / ngram-map-k / ngram-map-k4v / ngram-mod / ngram-cache`。
+2. 但 `llama-cli` 在 `-no-cnv` + stdin 重定向下会崩：
+   `terminate called ... std::system_error: 已避免资源死锁`（llama-bench 正常）。
+   → ngram 投机实验因此没跑成，需要换 llama-server 方式再测。
+
+## 本轮补充清单
+
+| 状态 | 项目 |
+| --- | --- |
+| ✅ 新增跑通 | FP8（负收益）、KIVI 式 KV 量化（4bit 可用）、QuaRot 旋转（2.0–2.5× 改善）、vLLM（单流 63.3 / 8 并发 481）、K3 基线（3.29 tok/s） |
+| ❌ 尝试失败 | SGLang（CUDA 13 + glibc 的 JIT 冲突）、K3 上的 ngram 投机（llama-cli 崩溃） |
+| ⏸ 未开始 | MInference（需稀疏 attention 内核）、exllamav2（需编译扩展）、TensorRT-LLM（需 TRT 10.8+ 与长编译） |
+
+---
+
+# 第四轮：vLLM 并发曲线 + ngram 投机解码（悬案的最终答案）
+
+## L. 并发曲线（Qwen3-1.7B bf16，vLLM，每请求 128 token）
+
+| 并发 | 合计 tok/s | 单流 tok/s |
+| ---: | ---: | ---: |
+| 1 | 62.3 | 62.3 |
+| 2 | 118.0 | 59.0 |
+| 4 | 237.0 | 59.3 |
+| 8 | 472.1 | 59.0 |
+| **16** | **927.9** | 58.0 |
+
+**结论：到 16 并发仍是近线性扩展（15×），单流稳定在 58–62 tok/s。**
+原因：decode 时权重每步只读一次，batch 越大，分摊到每个 token 的字节越少。
+按 448 GB/s 和 batch 16（每 token 212 MB）算理论上限约 1,720 tok/s，实测 928 = **54% 效率**。
+
+## M. ngram 投机解码：**3.68× 正收益**
+
+`speculative_config={"method":"ngram","num_speculative_tokens":5,"prompt_lookup_max":8,"prompt_lookup_min":3}`
+—— 不加载第二个模型，直接在 prompt/历史里找重复片段当草稿。
+
+| 场景 | 基线 | ngram 投机 | 加速比 |
+| --- | ---: | ---: | ---: |
+| **抄写类**（请原样复述这段文字） | 60.5 | **222.5** | **3.68×** |
+| 自由发挥（解释显存带宽） | 62.3 | 68.0 | 1.09× |
+
+**这一组数据把前三轮的"投机解码全是负收益"补齐了：**
+
+| 实现 | 草稿来源 | 场景 | 结果 |
+| --- | --- | --- | ---: |
+| transformers | 0.6B 独立模型 | 自由发挥 | 0.62× |
+| transformers | 0.6B 模型 NF4 | 自由发挥 | 0.55× |
+| llama.cpp | 0.6B 独立模型 | 自由发挥 | 0.73× |
+| **vLLM** | **ngram（无模型）** | **抄写** | **3.68×** ✅ |
+| vLLM | ngram（无模型） | 自由发挥 | 1.09× |
+
+**结论（这才是完整答案）：**
+
+1. **投机解码能不能赚钱，取决于接受率 α**：抄写类任务 α 极高（草稿几乎全中），自由发挥 α 很低。
+2. **草稿成本必须接近零**：独立小模型每步要吃 1/7 的带宽 + 同步开销；ngram 只查内存，几乎免费。
+3. **实现开销决定下限**：transformers / llama.cpp 的每步 Python+回滚开销，把 2.6× 的理论值吃成 0.7×。
+4. **端侧的正确路线**：优先 ngram / prompt lookup（零额外模型），其次是 EAGLE/Medusa 这类共享主干的小头；
+   **"再装一个小模型"在带宽受限设备上不成立**。
+
+> 注：vLLM 的 ngram 投机在 sm_120 上工作正常（`enforce_eager=True`），引擎加载约 15 s（缓存预热后）。
+
+---
+
+# 第五轮：vLLM 极限并发 / 前缀缓存 / KV cache FP8
+
+## N. 极限并发（继续加到 64）
+
+| 并发 | 合计 tok/s | 单流 tok/s | 相对单流倍数 |
+| ---: | ---: | ---: | ---: |
+| 1 | 62.3 | 62.3 | 1.0× |
+| 16 | 928.8 | 58.1 | 14.9× |
+| 32 | 1,789.8 | 55.9 | 28.7× |
+| **64** | **3,357.4** | 52.5 | **53.9×** |
+
+**结论：到 64 并发仍在近线性扩展（53.9×），单流缓慢下降到 52.5（-16%）。**
+这是"权重每步只读一次、batch 摊薄"的直接体现：batch 64 时每 token 只需 53 MB 权重读取，
+理论上限约 8,450 tok/s，实测 3,357 = **40% 效率**（剩余损失在 attention 的 KV 读取与调度开销）。
+
+> 顺带记录 vLLM 的显存画像：4,096 上下文下 KV cache 27,136 tokens / 2.90 GiB，
+> 「4K 上下文的并发上限 6.62×」。
+
+## O. 前缀缓存（同 4K token 前缀的第二次请求）
+
+| 配置 | 第二次请求耗时 |
+| --- | ---: |
+| 前缀缓存 **开** | **529 ms** |
+| 前缀缓存 关 | 688 ms |
+
+**省 23%**。对 RAG / 多轮对话（系统提示词很长的场景）这是白送的收益。
+
+## P. KV cache FP8（vLLM `kv_cache_dtype="fp8"`）
+
+| 配置 | 8 并发 tok/s | 引擎加载 |
+| --- | ---: | ---: |
+| auto（bf16 KV） | 468.5 | 96.3 s |
+| **fp8 KV** | **505.0（+7.8%）** | 54.0 s |
+
+**能跑通，且有小幅正收益。** 注意两个坑：
+
+1. **必须装 `ninja` 并把 venv/bin 加进 PATH**：fp8 路径会 JIT 编译内核，
+   否则报 `FileNotFoundError: 'ninja'`（表现为 "Engine core initialization failed"，看不到根因）。
+2. **要设 `CUDA_HOME=/usr/local/cuda`**（本机 CUDA 13.0 的头文件在 `targets/x86_64-linux/include`）。
+
+对比第 G 节的 torchao FP8（负收益）：差别在于 **vLLM 有原生 fp8 attention/GEMM 内核**，
+torchao 的 weight-only 只是存储 8bit 再反量化。
+
+---
+
+# 第六轮：长上下文 prefill / GPTQ-Int8 / 量化+投机叠加
+
+## Q. 长上下文 prefill 曲线（Qwen3-1.7B bf16，vLLM）
+
+**方法**：`max_tokens=1`，计时 ≈ prefill 耗时。**必须关掉前缀缓存**
+（`enable_prefix_caching=False`），否则同一 prompt 第二次直接命中缓存 ——
+我第一次没关，测出 32K 上下文 385,069 tok/s（超过硬件理论峰值），是假的。
+
+| 上下文 | prefill 耗时 | prefill 吞吐 |
+| ---: | ---: | ---: |
+| 480 | 39.8 ms | 12,054 tok/s |
+| 2,016 | 150.9 ms | **13,357 tok/s** |
+| 8,160 | 729.2 ms | 11,190 tok/s |
+| 16,368 | 2,059 ms | 7,950 tok/s |
+| 32,736 | 5,758 ms | **5,686 tok/s** |
+
+**结论：prefill 吞吐在 2K 附近见顶，之后随长度下降，32K 只剩 42%。**
+线性层是 O(L)，attention 是 O(L²)，所以长上下文 prefill 会被 attention 拖垮——
+这正好和 decode 相反（decode 每 token 只多读 KV，是 O(L) 增长）。
+
+## R. vLLM + GPTQ-Int8 权重（含与 ngram 投机叠加）
+
+> AWQ 版：ModelScope 上 `Qwen/Qwen3-1.7B-AWQ` 返回 404（无此版本），
+> 改用 `Qwen/Qwen3-1.7B-GPTQ-Int8`（2.0 GB）。
+
+| 配置 | 单流 | 8 并发 | 抄写基线 | +ngram 投机 |
+| --- | ---: | ---: | ---: | ---: |
+| bf16 | **62.3** | **472.1** | 60.5 | 222.5（3.68×） |
+| GPTQ-Int8 | 46.0 | 353.7 | 45.5 | 171.7（**3.77×**） |
+
+**两个结论：**
+
+1. **GPTQ-Int8 比 bf16 慢 26%**（单流 62.3 → 46.0）。权重字节减半本应更快，
+   但 vLLM 在 sm_120 上走的是 `auto_gptq` 的反量化路径（marlin 内核未针对 sm_120 优化），
+   反量化开销吃掉了带宽收益。
+   → 与第 G 节 torchao FP8、第 P 节 KV-FP8 一起，构成同一条规律：
+   **量化的收益完全取决于"有没有该架构的原生内核"，与位宽本身无关。**
+2. **量化 + 投机可以叠加**：GPTQ-Int8 上 ngram 投机仍是 **3.77×**（45.5 → 171.7）。
+   两个加速手段作用在不同的地方——量化省带宽，投机省前向次数，互不冲突。
