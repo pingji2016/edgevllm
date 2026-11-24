@@ -150,6 +150,9 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `kv_fp8.py` | vLLM KV cache fp8 对比 | vllm |
 | `prefill_curve.py` | 长上下文 prefill 曲线（**必须关前缀缓存**） | vllm |
 | `gptq_test.py` | GPTQ-Int8 权重 + ngram 投机叠加 | vllm |
+| `r7_vllm.py` | vLLM 原生结构化输出（guided decoding）对比 | vllm |
+| `decode_curve.py` | 长上下文 decode 曲线（用 T256−T1 摊薄 prefill） | vllm |
+| `k3_ngram.sh` | K3 上用 llama-server 测 ngram 投机 | K3 + SpacemiT llama.cpp |
 
 > vLLM 相关脚本需要 `ninja` 在 PATH 中、并设 `CUDA_HOME=/usr/local/cuda`
 > （CUDA 13 的头文件在 `targets/x86_64-linux/include`，
