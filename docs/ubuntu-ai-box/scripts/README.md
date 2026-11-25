@@ -280,3 +280,6 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `grpo_math.py` | GRPO 训练（强制 `<answer>` 前缀 + 距离塑形奖励；`--kl` 开 KL；`--control random` 随机奖励对照） |
 | `eval_grpo.py` | 三套题评测（nat / bal / nat9）+ 预测分布与熵 |
 | `verify_kl.py` | 3 种子复核均衡题集准确率 |
+| `grpo_qwen.py` | Qwen3-1.7B 上的 LoRA-GRPO（三位×两位，300 步） |
+| `verify_qwen_rl.py` | 配对验证：同一组新题对比基座 vs LoRA（47%→60%） |
+| `probe_qwen_math.py` / `probe_difficulty.py` / `probe_hard*.py` | 难度带探测（找到 52.5% 的三位×两位） |
