@@ -114,3 +114,84 @@ export LD_LIBRARY_PATH=~/apps/llama-omni/build/bin
 ```
 
 > 镜像加速：`ghfast.top` 前缀对 GitHub clone 有效（直连 3 次全部失败，镜像一次成功）。
+
+---
+
+## 7. 音频链路实测（2026-11-25 追加）
+
+### 7.1 权重与工具
+
+| 组件 | 文件 | 大小 |
+| --- | --- | ---: |
+| 音频编码器 | `audio/MiniCPM-o-4_5-audio-F16.gguf` | 630 MB |
+| TTS 主干 | `tts/MiniCPM-o-4_5-tts-F16.gguf` | 1.08 GB |
+| 声学投影 | `tts/MiniCPM-o-4_5-projector-F16.gguf` | 15 MB |
+| token→wav | `token2wav-gguf/`（encoder/flow/hifigan 等 5 个） | 879 MB |
+
+工具（`llama.cpp-omni` 自带）：
+`llama-omni-cli`、`llama-omni-single-test-audio`、`llama-omni-single-test-omni`、
+`llama-tts`、`llama-omni-server`、`llama-omni-perf-duplex`。
+
+### 7.2 输入是流式的（这点很关键）
+
+音频不是"一个文件喂进去"，而是**按 chunk 模拟实时流**：
+
+```
+/tmp/aud/aud0000.wav   ← 第 0 秒
+/tmp/aud/aud0001.wav   ← 第 1 秒
+...
+/tmp/aud/aud0013.wav   ← 第 13 秒
+```
+
+源码注释明确：*"所有 audio chunk 同步 prefill 完成后，统一 decode 一次生成完整回复"*，
+且**必须从 index>=1 开始**（index 0 会被 `stream_prefill` 丢掉）。
+
+### 7.3 实测（13.75 s 中文语音，切成 14 块）
+
+| 阶段 | 实测 |
+| --- | --- |
+| 音频 prefill（每块 1 s） | **65–72 ms / 块** |
+| 全部 14 块后的 n_past | 245 token |
+| 一次 decode | 53 token（n_past 245 → 298） |
+| TTS 生成 | **12 段 × 1 s = 11.84 s 音频** |
+| 端到端总耗时 | **54 s**（约 3.9× 实时） |
+
+### 7.4 两个结论
+
+**① 音频理解链路是通的。**
+14 个 chunk 依次 prefill 成功，模型正常触发了 end token 并进入 TTS 阶段。
+系统提示词也正确注入：
+
+```
+你是由面壁智能开发的人工智能助手：面壁小钢炮。
+请认真、高质量地回复用户的问题。请用高自然度的方式和用户聊天。
+```
+
+**② 但语音输出不可用。**
+
+| 检查 | 结果 |
+| --- | --- |
+| 音频能量 | 正常（RMS 0.098、峰值 0.99，不是静音） |
+| 拼接后时长 | 11.84 s |
+| ASR 回听 | **空**（语种判定 "nn" 挪威语，置信度仅 0.32） |
+
+也就是说：**token2wav 生成了"有能量的声音"，但不是可懂的语音**。
+
+可能原因（按可能性）：
+
+1. **Q4_K_M 量化伤害了音频 token 的分布** —— 音频 token 对数值误差比文本敏感得多，
+   社区普遍建议 TTS 用 Q8_0 或 F16；
+2. `--ref-audio` 默认参考音（189 KB）与目标音色不匹配，克隆失败；
+3. 单工模式（`--no-tts` 关掉时走 simplex）本身的已知限制。
+
+### 7.5 建议
+
+| 目标 | 建议 |
+| --- | --- |
+| 要**听得懂**的语音输出 | 换 **Q8_0（8.11 GB）** 或 F16（15.26 GB）再测；Q4 不够 |
+| 只要**音频理解**（ASR/问答） | Q4_K_M 可用，14 块 1 s 只需 ~1 s prefill |
+| 要做**全双工实时对话** | 需要 `llama-omni-test-duplex` + 麦克风/扬声器回环，本轮未做 |
+
+> 一句话：**这条链路"能跑通"，但"跑得好"还需要更高的量化精度。**
+> 与前面 DeepSeek-OCR 的结论一样：**专用小模型（faster-whisper 40× 实时）在单项任务上仍然更快更准**，
+> 9B 全模态的价值在"一个模型同时看、听、说"，而不是单项性能。
