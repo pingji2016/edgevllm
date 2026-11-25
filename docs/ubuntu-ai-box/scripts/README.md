@@ -184,3 +184,17 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `bench_ops.py` | torch 侧计时，算真实 TFLOPS / GB/s |
 | `lora_llm.py` | Qwen3-0.6B LoRA 微调（含数据构造与 A/B） |
 | `lora_ab.py` | base vs LoRA 对比（记得 enable_thinking=False） |
+
+---
+
+## 8. 服务化与对齐脚本
+
+对应 [serving-and-alignment.md](../serving-and-alignment.md)。
+
+| 脚本 | 用途 |
+| --- | --- |
+| `vllm_lora_prefix.py` | vLLM 多 LoRA 服务开销 + 前缀缓存初测 |
+| `prefix_curve.py` | 前缀缓存精确曲线（按 token 数构造 prompt，3 次取最小） |
+| `make_dpo_data.py` | 从 SFT 数据合成 DPO 偏好对（rejected = 张冠李戴） |
+| `eval_dpo.py` | DPO 前后 margin / 胜率对比 |
+| `tier2_de.py` | 视频多帧理解 + silero-vad 端点检测 |

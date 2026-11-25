@@ -24,6 +24,7 @@
 | [`capability-internals.md`](capability-internals.md) | Wav2Lip / InsightFace / SDXL-LoRA 三项的内部原理与架构（含公式、踩坑、实测） |
 | [`realtime-services.md`](realtime-services.md) | 实时链路实测：流式 ASR / Qwen3-VL 抽帧 / SAM2 分割 / CosyVoice2 诊断 |
 | [`roofline-and-lora.md`](roofline-and-lora.md) | ncu roofline 实测（带宽 90% / 算力 50%）+ Qwen3-0.6B LoRA 微调 |
+| [`serving-and-alignment.md`](serving-and-alignment.md) | 服务化与对齐：vLLM 多 LoRA / 前缀缓存曲线 / DPO / 视频理解 / VAD |
 
 ## 实测摘要
 
