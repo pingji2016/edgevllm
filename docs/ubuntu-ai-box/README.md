@@ -30,6 +30,8 @@
 | [`tts-kokoro.md`](tts-kokoro.md) | TTS 横向：Kokoro-82M 可懂（RTF 0.55），胜过 CosyVoice2/MiniCPM-o 的语音输出 |
 | [`e2e-and-opt.md`](e2e-and-opt.md) | 端到端：语音助手 3.33s / CUDA Graph +72-84% / Kokoro 上 K3（0.48× 实时） |
 | [`rag-over-docs.md`](rag-over-docs.md) | 用自己的 77 篇文档搭 RAG：R@1 42%、端到端 709ms、四类失败分析 |
+| [`stack-best-config.md`](stack-best-config.md) | 全优化叠加：单流 238 tok/s vs 64 并发 6,578 tok/s；ngram 交叉点在 8 并发 |
+| [`rag-locate.md`](rag-locate.md) | 定位式 RAG：模型只指位置、程序抄原文；表格上下文从 4/12 救到 6/12 |
 
 ## 实测摘要
 

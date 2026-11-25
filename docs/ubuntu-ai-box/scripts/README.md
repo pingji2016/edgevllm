@@ -258,3 +258,14 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `rag_build.py` | 文档切片（按标题 + 700 字滑窗）+ bge-small-zh 向量化 |
 | `rag_eval.py` | 12 问召回率 + 带上下文生成（**记得 enable_thinking=False**） |
+
+---
+
+## 15. 叠加与定位式 RAG
+
+| 脚本 | 用途 |
+| --- | --- |
+| `stack_all.py` | 6 配置叠加矩阵（eager/graph/fp8kv/ngram × GPTQ/bf16） |
+| `ngram_crossover.py` | ngram 投机的并发交叉点（1/4/8/16/32/64） |
+| `rag_locate.py` | 直接回答 / 单选定位 / 句子级 reranker 三路对比 |
+| `rag_locate2.py` | 上下文增强消融（裸句 / +章节标题 / +表头）+ 交叉验证路由 |
