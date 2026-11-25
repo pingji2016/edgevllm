@@ -249,3 +249,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `voice_agent.py` | VAD→ASR→LLM→TTS 全链路（ASR 走子进程绕 cu12/cu13 冲突） |
 | `cudagraph_test.py` | vLLM eager vs CUDA Graph 对照 |
 | `k3_tts_run.sh` | 在 K3 上跑 Kokoro（stub misaki + wave 写音频） |
+
+---
+
+## 14. RAG 脚本
+
+| 脚本 | 用途 |
+| --- | --- |
+| `rag_build.py` | 文档切片（按标题 + 700 字滑窗）+ bge-small-zh 向量化 |
+| `rag_eval.py` | 12 问召回率 + 带上下文生成（**记得 enable_thinking=False**） |
