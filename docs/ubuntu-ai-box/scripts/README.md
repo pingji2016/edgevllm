@@ -198,3 +198,16 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `make_dpo_data.py` | 从 SFT 数据合成 DPO 偏好对（rejected = 张冠李戴） |
 | `eval_dpo.py` | DPO 前后 margin / 胜率对比 |
 | `tier2_de.py` | 视频多帧理解 + silero-vad 端点检测 |
+
+---
+
+## 9. 补充闭环脚本
+
+| 脚本 | 用途 |
+| --- | --- |
+| `decode_32k.py` | 32K 上下文 decode（需先停 vlm-server，`gpu_memory_utilization=0.8`） |
+| `vad_asr.py` | VAD 分段 vs 固定窗口的 ASR 对比 |
+| `asr_sizes.py` | tiny/base/small/medium 尺寸扫描 |
+| `frame_scan.py` | 视频帧数 2/4/8 扫描 |
+| `lora_formal_eval.py` | LoRA 留出集 eval loss + 长度统计 + 定性 |
+| `vram_budget.py` | 多模型共存显存画像（含 cu12/cu13 冲突验证） |
