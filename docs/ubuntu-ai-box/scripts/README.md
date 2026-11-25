@@ -222,3 +222,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `dsocr_prep.sh` | 下载权重 + 生成 A4 测试文档图与参考文本 |
 | `dsocr_default.py` | 单页 OCR（**必须 `moe_backend="triton"`，且不传 `mm_processor_kwargs`**） |
+
+---
+
+## 11. MiniCPM-o 4.5 脚本
+
+| 脚本 | 用途 |
+| --- | --- |
+| `fix_build_omni.sh` | 给 llama.cpp-omni 打 F_NOCACHE 补丁并重新编译 |
+| `run_mco2.sh` | 视觉问答（必须 `--no-mmproj-offload`） |
