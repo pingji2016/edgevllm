@@ -239,3 +239,13 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | 脚本 | 用途 |
 | --- | --- |
 | `kokoro_tts.py` | Kokoro-82M 中文 TTS（`SKIP_ASR=1` 生成、单独进程做 ASR 验收） |
+
+---
+
+## 13. 端到端与优化脚本
+
+| 脚本 | 用途 |
+| --- | --- |
+| `voice_agent.py` | VAD→ASR→LLM→TTS 全链路（ASR 走子进程绕 cu12/cu13 冲突） |
+| `cudagraph_test.py` | vLLM eager vs CUDA Graph 对照 |
+| `k3_tts_run.sh` | 在 K3 上跑 Kokoro（stub misaki + wave 写音频） |

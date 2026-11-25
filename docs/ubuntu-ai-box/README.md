@@ -28,6 +28,7 @@
 | [`deepseek-ocr.md`](deepseek-ocr.md) | DeepSeek-OCR 实测：视觉 token 压缩文档，单页 7.26s、去标签精度 83.5% |
 | [`minicpm-o.md`](minicpm-o.md) | MiniCPM-o 4.5（9B 全模态）本机跑通：含 Linux 编译补丁与视觉实测 |
 | [`tts-kokoro.md`](tts-kokoro.md) | TTS 横向：Kokoro-82M 可懂（RTF 0.55），胜过 CosyVoice2/MiniCPM-o 的语音输出 |
+| [`e2e-and-opt.md`](e2e-and-opt.md) | 端到端：语音助手 3.33s / CUDA Graph +72-84% / Kokoro 上 K3（0.48× 实时） |
 
 ## 实测摘要
 
