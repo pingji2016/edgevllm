@@ -269,3 +269,14 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `ngram_crossover.py` | ngram 投机的并发交叉点（1/4/8/16/32/64） |
 | `rag_locate.py` | 直接回答 / 单选定位 / 句子级 reranker 三路对比 |
 | `rag_locate2.py` | 上下文增强消融（裸句 / +章节标题 / +表头）+ 交叉验证路由 |
+
+---
+
+## 16. RLVR（可验证奖励）
+
+| 脚本 | 用途 |
+| --- | --- |
+| `probe_rlvr.py` | 基线探测：模型困在 `<think>`、0/40 格式正确 |
+| `grpo_math.py` | GRPO 训练（强制 `<answer>` 前缀 + 距离塑形奖励；`--kl` 开 KL；`--control random` 随机奖励对照） |
+| `eval_grpo.py` | 三套题评测（nat / bal / nat9）+ 预测分布与熵 |
+| `verify_kl.py` | 3 种子复核均衡题集准确率 |
