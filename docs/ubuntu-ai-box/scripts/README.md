@@ -170,3 +170,17 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `sam2_test.py` | SAM2 hiera-tiny 点提示分割，测单帧耗时 |
 | `cosy_asr.py` | ASR 回听工具（字符级相似度判卷） |
 | `cosy_diag2.py` | CosyVoice2 分环节诊断（精度/前端/LLM） |
+
+---
+
+## 7. Roofline 与训练脚本
+
+对应 [roofline-and-lora.md](../roofline-and-lora.md)。
+
+| 脚本 | 用途 |
+| --- | --- |
+| `roof_kernels.py` | 被测 kernel（gemm / copy / add / attn / rmsnorm） |
+| `ncu_roofline.sh` | 用 sudo ncu 抓 SpeedOfLight 段（无权限会报 ERR_NVGPUCTRPERM） |
+| `bench_ops.py` | torch 侧计时，算真实 TFLOPS / GB/s |
+| `lora_llm.py` | Qwen3-0.6B LoRA 微调（含数据构造与 A/B） |
+| `lora_ab.py` | base vs LoRA 对比（记得 enable_thinking=False） |

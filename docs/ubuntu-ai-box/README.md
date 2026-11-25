@@ -23,6 +23,7 @@
 | [`inference-acceleration.md`](inference-acceleration.md) | 推理加速三轮实测：量化七档 / KV 压缩 / 投机解码，全部带数字与负结果 |
 | [`capability-internals.md`](capability-internals.md) | Wav2Lip / InsightFace / SDXL-LoRA 三项的内部原理与架构（含公式、踩坑、实测） |
 | [`realtime-services.md`](realtime-services.md) | 实时链路实测：流式 ASR / Qwen3-VL 抽帧 / SAM2 分割 / CosyVoice2 诊断 |
+| [`roofline-and-lora.md`](roofline-and-lora.md) | ncu roofline 实测（带宽 90% / 算力 50%）+ Qwen3-0.6B LoRA 微调 |
 
 ## 实测摘要
 
