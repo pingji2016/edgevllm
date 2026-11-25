@@ -27,6 +27,7 @@
 | [`serving-and-alignment.md`](serving-and-alignment.md) | 服务化与对齐：vLLM 多 LoRA / 前缀缓存曲线 / DPO / 视频理解 / VAD |
 | [`deepseek-ocr.md`](deepseek-ocr.md) | DeepSeek-OCR 实测：视觉 token 压缩文档，单页 7.26s、去标签精度 83.5% |
 | [`minicpm-o.md`](minicpm-o.md) | MiniCPM-o 4.5（9B 全模态）本机跑通：含 Linux 编译补丁与视觉实测 |
+| [`tts-kokoro.md`](tts-kokoro.md) | TTS 横向：Kokoro-82M 可懂（RTF 0.55），胜过 CosyVoice2/MiniCPM-o 的语音输出 |
 
 ## 实测摘要
 

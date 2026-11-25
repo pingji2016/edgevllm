@@ -231,3 +231,11 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `fix_build_omni.sh` | 给 llama.cpp-omni 打 F_NOCACHE 补丁并重新编译 |
 | `run_mco2.sh` | 视觉问答（必须 `--no-mmproj-offload`） |
+
+---
+
+## 12. TTS 脚本（Kokoro）
+
+| 脚本 | 用途 |
+| --- | --- |
+| `kokoro_tts.py` | Kokoro-82M 中文 TTS（`SKIP_ASR=1` 生成、单独进程做 ASR 验收） |
