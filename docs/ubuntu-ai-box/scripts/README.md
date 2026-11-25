@@ -211,3 +211,14 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `frame_scan.py` | 视频帧数 2/4/8 扫描 |
 | `lora_formal_eval.py` | LoRA 留出集 eval loss + 长度统计 + 定性 |
 | `vram_budget.py` | 多模型共存显存画像（含 cu12/cu13 冲突验证） |
+
+---
+
+## 10. DeepSeek-OCR 脚本
+
+对应 [deepseek-ocr.md](../deepseek-ocr.md)。
+
+| 脚本 | 用途 |
+| --- | --- |
+| `dsocr_prep.sh` | 下载权重 + 生成 A4 测试文档图与参考文本 |
+| `dsocr_default.py` | 单页 OCR（**必须 `moe_backend="triton"`，且不传 `mm_processor_kwargs`**） |

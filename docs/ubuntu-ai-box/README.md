@@ -25,6 +25,7 @@
 | [`realtime-services.md`](realtime-services.md) | 实时链路实测：流式 ASR / Qwen3-VL 抽帧 / SAM2 分割 / CosyVoice2 诊断 |
 | [`roofline-and-lora.md`](roofline-and-lora.md) | ncu roofline 实测（带宽 90% / 算力 50%）+ Qwen3-0.6B LoRA 微调 |
 | [`serving-and-alignment.md`](serving-and-alignment.md) | 服务化与对齐：vLLM 多 LoRA / 前缀缓存曲线 / DPO / 视频理解 / VAD |
+| [`deepseek-ocr.md`](deepseek-ocr.md) | DeepSeek-OCR 实测：视觉 token 压缩文档，单页 7.26s、去标签精度 83.5% |
 
 ## 实测摘要
 
