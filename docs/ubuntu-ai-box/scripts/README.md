@@ -329,3 +329,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `rft_math.py` | 2000×16 采样 → 筛对 → LoRA SFT → 200 题评测 |
 | `rft_vote.py` | RFT 模型的自一致性投票对照 |
+
+---
+
+## 22. 混合检索
+
+| 脚本 | 用途 |
+| --- | --- |
+| `hybrid_rag.py` | bge-m3 稠密 + BM25 + RRF + reranker 四路消融 |
+| `hybrid_rag2.py` | 完整 R@1/3/5（含 dense+reranker 对照） |
