@@ -203,6 +203,8 @@ KV 占用 **112 KB/token**：16K = 1.84 GB，32K = 3.67 GB（16 GB 卡上 32K �
 | `tts-kokoro.md` | Kokoro 82M：RTF 0.014（70× 实时）、K3 上 2.08 |
 | `capability-internals.md` | Wav2Lip / InsightFace / SDXL-LoRA 原理与公式 |
 | `camera-ai-filter.md` | 摄像头逐帧 AI 滤镜 |
+| `doc-governance.md` | 结构手段对抗主题稀释：全部无效，75% 是天花板 |
+| `bench-suite.md` | 9 项回归检查，4 分钟验证 29 篇的结论 |
 | `3d-gaussian-splatting.md` | 3D 高斯泼溅 |
 
 ### 5.5 RAG
@@ -233,6 +235,7 @@ KV 占用 **112 KB/token**：16K = 1.84 GB，32K = 3.67 GB（16 GB 卡上 32K �
 | 实验脚本 | `~/apps/infer-research`、`~/apps/infer-engines` |
 | 训练/RL | `~/apps/minimind` |
 | 文档仓库 | `~/apps/edgevllm/docs/ubuntu-ai-box` |
+| **回归基准** | `~/apps/edgevllm/bench`（`python run.py`，9 项检查） |
 
 **跑大模型前必做**：
 
