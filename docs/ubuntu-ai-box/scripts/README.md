@@ -301,3 +301,13 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `needle.py` | needle-in-a-haystack：2K–32K × 3 深度，测准确率/prefill/KV |
 | `needle_mid.py` | 20K/24K/28K 加密扫描（定位崩溃点） |
+
+---
+
+## 19. 量化与任务准确率
+
+| 脚本 | 用途 |
+| --- | --- |
+| `quant_quality.py` | vLLM 内 bf16 vs GPTQ-Int8：算术/JSON/needle |
+| `quant_quality_hf.py` | HF 内 bf16 vs NF4（含峰值显存） |
+| `quant_paired.py` | 300 题配对检验 + McNemar（量化评估必做） |

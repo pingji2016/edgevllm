@@ -35,6 +35,7 @@
 | [`rlvr-small-model.md`](rlvr-small-model.md) | RLVR 解剖：30M 模型塌缩到众数（nat 10%=平凡基线），KL 后 13.5% vs 基线 6.7%；1.7B 同配方 47%→60% |
 | [`test-time-scaling.md`](test-time-scaling.md) | 投票 vs RL：N=32 投票 −1pp（错误系统性，top-1 占 88%），RL +13pp |
 | [`long-context-needle.md`](long-context-needle.md) | 长上下文实测：≤8K 100%、16K 78%、32K 11%；静默抓错数字 |
+| [`quant-quality.md`](quant-quality.md) | 量化对准确率：Int8 无损（+1.53x）、NF4 掉 6.7pp（z=3.02）；损伤是任务选择性的 |
 
 ## 实测摘要
 
