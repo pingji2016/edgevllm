@@ -311,3 +311,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `quant_quality.py` | vLLM 内 bf16 vs GPTQ-Int8：算术/JSON/needle |
 | `quant_quality_hf.py` | HF 内 bf16 vs NF4（含峰值显存） |
 | `quant_paired.py` | 300 题配对检验 + McNemar（量化评估必做） |
+
+---
+
+## 20. 草稿模型投机
+
+| 脚本 | 用途 |
+| --- | --- |
+| `draft_spec.py` | Qwen3-0.6B 当 1.7B 的 draft：1/8/32 并发 + 接受率 |
+| `draft_diag.py` | 诊断：读取 vLLM 投机指标、k=3/5 对比 |
