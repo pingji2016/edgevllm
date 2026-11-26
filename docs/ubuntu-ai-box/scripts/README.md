@@ -338,3 +338,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `hybrid_rag.py` | bge-m3 稠密 + BM25 + RRF + reranker 四路消融 |
 | `hybrid_rag2.py` | 完整 R@1/3/5（含 dense+reranker 对照） |
+
+---
+
+## 23. 蒸馏
+
+| 脚本 | 用途 |
+| --- | --- |
+| `distill_math.py` | 两个教师（基座/GRPO）→ 0.6B 学生，各 2000 条样本 |
+| `distill_ctrl.py` | 控制实验：RL 教师数据截到等量，拆分质量/数量贡献 |
