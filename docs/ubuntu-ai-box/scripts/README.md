@@ -347,3 +347,4 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `distill_math.py` | 两个教师（基座/GRPO）→ 0.6B 学生，各 2000 条样本 |
 | `distill_ctrl.py` | 控制实验：RL 教师数据截到等量，拆分质量/数量贡献 |
+| `distill_logit.py` | logit（KL）蒸馏 vs CE：同数据/同初始化，配对 McNemar |

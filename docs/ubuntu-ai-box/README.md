@@ -53,7 +53,7 @@
 | [`quant-quality.md`](quant-quality.md) | 量化对准确率：Int8 无损（+1.53x）、NF4 掉 6.7pp（z=3.02）；损伤是任务选择性的 |
 | [`draft-spec-decode.md`](draft-spec-decode.md) | 草稿模型投机：0.6B→1.7B 接受率 34.9%≈成本比 35%，恰好卡在平衡点（0.90×/0.74×/0.53×） |
 | [`rft-vs-grpo.md`](rft-vs-grpo.md) | RFT 为何无效：正确样本 p≈1 → 梯度≈0，loss 归零；+2pp（噪声内）vs GRPO +13pp |
-| [`distillation.md`](distillation.md) | 蒸馏 1.7B→0.6B：1.3 分钟 +15.5pp；教师 +13pp 只传下 +2pp |
+| [`distillation.md`](distillation.md) | 蒸馏 1.7B→0.6B：1.3 分钟 +15.5pp；教师 +13pp 只传下 +2pp；KL 蒸馏无额外收益（容量是硬约束）|
 | [`hybrid-retrieval.md`](hybrid-retrieval.md) | bge-m3 + 重排：R@1 42%→75%、R@5 92%；BM25/RRF 零增益（伪需求） |
 
 ## 实测摘要
