@@ -292,3 +292,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `tta_sc.py` | self-consistency：200 题 × 32 采样，N=1..32 多数投票 + oracle |
 | `tta_why.py` | 机制分析：答案集中度、高温实验 |
+
+---
+
+## 18. 长上下文
+
+| 脚本 | 用途 |
+| --- | --- |
+| `needle.py` | needle-in-a-haystack：2K–32K × 3 深度，测准确率/prefill/KV |
+| `needle_mid.py` | 20K/24K/28K 加密扫描（定位崩溃点） |

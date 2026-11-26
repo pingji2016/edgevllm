@@ -34,6 +34,7 @@
 | [`rag-locate.md`](rag-locate.md) | 定位式 RAG：模型只指位置、程序抄原文；表格上下文从 4/12 救到 6/12 |
 | [`rlvr-small-model.md`](rlvr-small-model.md) | RLVR 解剖：30M 模型塌缩到众数（nat 10%=平凡基线），KL 后 13.5% vs 基线 6.7%；1.7B 同配方 47%→60% |
 | [`test-time-scaling.md`](test-time-scaling.md) | 投票 vs RL：N=32 投票 −1pp（错误系统性，top-1 占 88%），RL +13pp |
+| [`long-context-needle.md`](long-context-needle.md) | 长上下文实测：≤8K 100%、16K 78%、32K 11%；静默抓错数字 |
 
 ## 实测摘要
 
