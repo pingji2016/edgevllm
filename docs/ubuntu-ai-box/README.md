@@ -37,6 +37,7 @@
 | [`long-context-needle.md`](long-context-needle.md) | 长上下文实测：≤8K 100%、16K 78%、32K 11%；静默抓错数字 |
 | [`quant-quality.md`](quant-quality.md) | 量化对准确率：Int8 无损（+1.53x）、NF4 掉 6.7pp（z=3.02）；损伤是任务选择性的 |
 | [`draft-spec-decode.md`](draft-spec-decode.md) | 草稿模型投机：0.6B→1.7B 接受率 34.9%≈成本比 35%，恰好卡在平衡点（0.90×/0.74×/0.53×） |
+| [`rft-vs-grpo.md`](rft-vs-grpo.md) | RFT 为何无效：正确样本 p≈1 → 梯度≈0，loss 归零；+2pp（噪声内）vs GRPO +13pp |
 
 ## 实测摘要
 

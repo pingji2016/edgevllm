@@ -320,3 +320,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `draft_spec.py` | Qwen3-0.6B 当 1.7B 的 draft：1/8/32 并发 + 接受率 |
 | `draft_diag.py` | 诊断：读取 vLLM 投机指标、k=3/5 对比 |
+
+---
+
+## 21. RFT 拒绝采样微调
+
+| 脚本 | 用途 |
+| --- | --- |
+| `rft_math.py` | 2000×16 采样 → 筛对 → LoRA SFT → 200 题评测 |
+| `rft_vote.py` | RFT 模型的自一致性投票对照 |
