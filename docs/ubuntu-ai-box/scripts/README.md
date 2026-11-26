@@ -357,3 +357,13 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `doc_governance.py` | 六种结构配置（扁平/标题/路由/并集）对比 R@1/3/5 |
 | `../../bench/run.py` | 9 项回归检查（物理公式、带宽、检索、JSON、长上下文、索引） |
+
+---
+
+## 25. 工具调用
+
+| 脚本 | 用途 |
+| --- | --- |
+| `tool_calling.py` | 10 工具 × 60 指令 × 3 模式（free/xgrammar/name_only） |
+| `tool_fail.py` | 打印失败案例并归类 |
+| `tool_rescore.py` / `tool_rescore2.py` | 等价判据重评分（语言码/单位/时间/表达式） |

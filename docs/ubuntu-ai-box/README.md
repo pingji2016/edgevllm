@@ -58,6 +58,7 @@
 | [`distillation.md`](distillation.md) | 蒸馏 1.7B→0.6B：1.3 分钟 +15.5pp；教师 +13pp 只传下 +2pp；KL 蒸馏无额外收益（容量是硬约束）|
 | [`doc-governance.md`](doc-governance.md) | 文档治理：标题前缀/文档路由/并集全部无效，75% 是检索栈天花板 |
 | [`bench-suite.md`](bench-suite.md) | 回归基准：9 项检查（物理/检索/模型/索引），4 分钟验证 29 篇的结论 |
+| [`tool-calling.md`](tool-calling.md) | 工具调用：选择 98.3%、等价判据 96.7%；严格判据误杀 18 条（30pp） |
 | [`hybrid-retrieval.md`](hybrid-retrieval.md) | bge-m3 + 重排：R@1 42%→75%、R@5 92%；BM25/RRF 零增益（伪需求） |
 
 ## 实测摘要
