@@ -33,6 +33,7 @@
 | [`stack-best-config.md`](stack-best-config.md) | 全优化叠加：单流 238 tok/s vs 64 并发 6,578 tok/s；ngram 交叉点在 8 并发 |
 | [`rag-locate.md`](rag-locate.md) | 定位式 RAG：模型只指位置、程序抄原文；表格上下文从 4/12 救到 6/12 |
 | [`rlvr-small-model.md`](rlvr-small-model.md) | RLVR 解剖：30M 模型塌缩到众数（nat 10%=平凡基线），KL 后 13.5% vs 基线 6.7%；1.7B 同配方 47%→60% |
+| [`test-time-scaling.md`](test-time-scaling.md) | 投票 vs RL：N=32 投票 −1pp（错误系统性，top-1 占 88%），RL +13pp |
 
 ## 实测摘要
 

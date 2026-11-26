@@ -283,3 +283,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `grpo_qwen.py` | Qwen3-1.7B 上的 LoRA-GRPO（三位×两位，300 步） |
 | `verify_qwen_rl.py` | 配对验证：同一组新题对比基座 vs LoRA（47%→60%） |
 | `probe_qwen_math.py` / `probe_difficulty.py` / `probe_hard*.py` | 难度带探测（找到 52.5% 的三位×两位） |
+
+---
+
+## 17. 测试时扩展
+
+| 脚本 | 用途 |
+| --- | --- |
+| `tta_sc.py` | self-consistency：200 题 × 32 采样，N=1..32 多数投票 + oracle |
+| `tta_why.py` | 机制分析：答案集中度、高温实验 |
