@@ -8,6 +8,8 @@
 
 ## 🚀 先看这个
 
+**想验证这些结论还成不成立？跑 [`bench/`](bench/README.md)（9 项检查，4 分钟）**
+
 **看不懂术语？从 [`PRIMER.md`](PRIMER.md) 开始** —— 零基础版：
 每个概念 = 一个类比 + 一个公式 + 一个 3 分钟实验 + 自测题，
 还带 30 条术语表、10 个小实验、10 条常见误解。
@@ -54,6 +56,8 @@
 | [`draft-spec-decode.md`](draft-spec-decode.md) | 草稿模型投机：0.6B→1.7B 接受率 34.9%≈成本比 35%，恰好卡在平衡点（0.90×/0.74×/0.53×） |
 | [`rft-vs-grpo.md`](rft-vs-grpo.md) | RFT 为何无效：正确样本 p≈1 → 梯度≈0，loss 归零；+2pp（噪声内）vs GRPO +13pp |
 | [`distillation.md`](distillation.md) | 蒸馏 1.7B→0.6B：1.3 分钟 +15.5pp；教师 +13pp 只传下 +2pp；KL 蒸馏无额外收益（容量是硬约束）|
+| [`doc-governance.md`](doc-governance.md) | 文档治理：标题前缀/文档路由/并集全部无效，75% 是检索栈天花板 |
+| [`bench-suite.md`](bench-suite.md) | 回归基准：9 项检查（物理/检索/模型/索引），4 分钟验证 29 篇的结论 |
 | [`hybrid-retrieval.md`](hybrid-retrieval.md) | bge-m3 + 重排：R@1 42%→75%、R@5 92%；BM25/RRF 零增益（伪需求） |
 
 ## 实测摘要

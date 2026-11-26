@@ -348,3 +348,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `distill_math.py` | 两个教师（基座/GRPO）→ 0.6B 学生，各 2000 条样本 |
 | `distill_ctrl.py` | 控制实验：RL 教师数据截到等量，拆分质量/数量贡献 |
 | `distill_logit.py` | logit（KL）蒸馏 vs CE：同数据/同初始化，配对 McNemar |
+
+---
+
+## 24. 文档治理与回归基准
+
+| 脚本 | 用途 |
+| --- | --- |
+| `doc_governance.py` | 六种结构配置（扁平/标题/路由/并集）对比 R@1/3/5 |
+| `../../bench/run.py` | 9 项回归检查（物理公式、带宽、检索、JSON、长上下文、索引） |
