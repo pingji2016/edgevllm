@@ -5,39 +5,58 @@
     "updated": "2026-11-26"
   },
   "kv_bytes_per_token": {
-    "expect": 114688, "tol": 0, "unit": "B",
+    "expect": 114688,
+    "tol": 0,
+    "unit": "B",
     "why": "Qwen3-1.7B: 2*28*8*128*2"
   },
   "decode_roofline_1p7b": {
-    "expect": 131.8, "tol": 1.0, "unit": "tok/s",
+    "expect": 131.8,
+    "tol": 1.0,
+    "unit": "tok/s",
     "why": "448 GB/s / 3.4 GB（bf16 权重）"
   },
   "spec_break_even": {
-    "expect": 1.0, "tol": 0.06, "unit": "x",
+    "expect": 1.0,
+    "tol": 0.06,
+    "unit": "x",
     "why": "(1+5*0.349)/(1+5*0.35)，实测接受率 34.9% ≈ 成本比 35%"
   },
   "concurrency_32k": {
-    "expect": 2.2, "tol": 0.4, "unit": "路",
+    "expect": 2.2,
+    "tol": 0.4,
+    "unit": "路",
     "why": "16GB*0.8 - 3.4(权重) - 1.5(激活) ≈ 7.5GB / (32768*112KB)"
   },
   "gpu_bandwidth": {
-    "min": 340, "unit": "GB/s",
+    "min": 340,
+    "unit": "GB/s",
     "why": "GDDR7 448 GB/s 标称，实测 350-420"
   },
   "rag_r1": {
-    "min": 0.67, "unit": "R@1",
+    "min": 0.67,
+    "unit": "R@1",
     "why": "bge-m3 稠密 + reranker，12 题基线 75%（容差 8pp）"
   },
   "json_compliance": {
-    "min": 0.9, "unit": "比例",
+    "min": 0.9,
+    "unit": "比例",
     "why": "10 个抽取任务，要求只输出 JSON"
   },
   "needle_8k": {
-    "min": 0.75, "unit": "命中率",
+    "min": 0.75,
+    "unit": "命中率",
     "why": "8K 上下文 2 深度 x 4 种子"
   },
   "docs_indexed": {
-    "expect": 1.0, "tol": 0, "unit": "比例",
+    "expect": 1.0,
+    "tol": 0,
+    "unit": "比例",
     "why": "docs/ubuntu-ai-box 下每篇 md 都要在 README 里被链接"
+  },
+  "tool_selection": {
+    "min": 0.9,
+    "unit": "比例",
+    "why": "20 条单轮指令 + 等价判据（严格判据会误杀语言码/单位）"
   }
 }

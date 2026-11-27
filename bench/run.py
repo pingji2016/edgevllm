@@ -29,6 +29,7 @@ RAGDIR = os.path.expanduser("~/apps/infer-research/rag")
 MD17 = "/home/pingji/.cache/modelscope/models/Qwen--Qwen3-1.7B/snapshots/master"
 
 CHECKS = {}
+sys.path.insert(0, HERE)
 
 
 def check(name, slow=False):
@@ -211,6 +212,17 @@ def _needle():
             ok += "741928" in tok.decode(g[0, ids.size(1):], skip_special_tokens=True)
             total += 1
     return ok / total, f"{ok}/{total} 命中"
+
+
+@check("tool_selection", slow=True)
+def _tool():
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import toolcheck
+    tok = AutoTokenizer.from_pretrained(MD17)
+    m = AutoModelForCausalLM.from_pretrained(MD17, dtype=torch.bfloat16,
+                                             device_map={"": 0}).eval()
+    return toolcheck.run(m, tok)
 
 
 # ---------------- 运行器 ----------------
