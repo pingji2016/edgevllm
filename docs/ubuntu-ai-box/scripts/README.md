@@ -367,3 +367,12 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `tool_calling.py` | 10 工具 × 60 指令 × 3 模式（free/xgrammar/name_only） |
 | `tool_fail.py` | 打印失败案例并归类 |
 | `tool_rescore.py` / `tool_rescore2.py` | 等价判据重评分（语言码/单位/时间/表达式） |
+
+---
+
+## 26. mini agent
+
+| 脚本 | 用途 |
+| --- | --- |
+| `mini_agent.py` | 6 个真实工具 + 20 个多步任务，对照无工具基线 |
+| `agent_rescore.py` | 修正判据后重评（读已保存答案，不重跑） |
