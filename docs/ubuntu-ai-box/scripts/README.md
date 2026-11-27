@@ -380,3 +380,13 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `mm_rag.py` | 以文搜图：24 张合成图，原版 CLIP vs Chinese-CLIP |
 | `mini_agent_guard.py` | 四道护栏（先读后答/路径白名单/单 JSON/读缓存）+ 触发计数 |
 | `merge_cross.py` | 跨能力合并：数学 LoRA + 新训中文大写 LoRA，扫 alpha |
+
+---
+
+## 27. 多 agent 协作
+
+| 脚本 | 用途 |
+| --- | --- |
+| `multi_agent.py` | 5 配置：1×1.7B / 3×0.6B 投票 / 辩论 1-2 轮 / MoA |
+| `parallel3_hf.py` | 3 个 0.6B 实例并行：显存 4.2GB、各自不同 T/top_p |
+| `parallel3_vllm.py` | vLLM 单实例 3 个不同 SamplingParams：112 tok/s 总 |

@@ -63,6 +63,7 @@
 | [`agent-guardrails.md`](agent-guardrails.md) | Agent 护栏：四道全部触发，准确率仍 65%——瓶颈是能力不是流程 |
 | [`lora-merging.md`](lora-merging.md) | LoRA 合并：同任务两适配器 60/52 → 混合严格插值，无协同 |
 | [`lora-merging-cross.md`](lora-merging-cross.md) | 跨能力合并：50/50 时新能力直接归零（悬崖），原生能力只是温和退化 |
+| [`multi-agent-debate.md`](multi-agent-debate.md) | 三个臭皮匠：3×0.6B 29-30% vs 1×1.7B 48%；MoA 反而把强者拉下水 |
 | [`multimodal-rag.md`](multimodal-rag.md) | 以文搜图：原版 CLIP 中文 17%/英文 92%，Chinese-CLIP 75% |
 | [`hybrid-retrieval.md`](hybrid-retrieval.md) | bge-m3 + 重排：R@1 42%→75%、R@5 92%；BM25/RRF 零增益（伪需求） |
 
