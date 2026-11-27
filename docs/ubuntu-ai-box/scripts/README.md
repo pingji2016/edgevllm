@@ -390,3 +390,7 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `multi_agent.py` | 5 配置：1×1.7B / 3×0.6B 投票 / 辩论 1-2 轮 / MoA |
 | `parallel3_hf.py` | 3 个 0.6B 实例并行：显存 4.2GB、各自不同 T/top_p |
 | `parallel3_vllm.py` | vLLM 单实例 3 个不同 SamplingParams：112 tok/s 总 |
+
+| `anti_conformity.py` | 四组防从众干预（置信度/匿名/反方/抗误导） |
+| `sycophancy17.py` | 1.7B 的抗误导对照（采纳率 11%） |
+| `sycophancy_ctrl.py` | 三提示对照：plain / neutral_check / wrong_hint |
