@@ -376,3 +376,4 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | --- | --- |
 | `mini_agent.py` | 6 个真实工具 + 20 个多步任务，对照无工具基线 |
 | `agent_rescore.py` | 修正判据后重评（读已保存答案，不重跑） |
+| `merge_lora.py` | GRPO LoRA + RFT LoRA 线性插值（5 个 alpha） |
