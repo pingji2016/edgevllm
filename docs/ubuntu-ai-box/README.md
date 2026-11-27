@@ -60,6 +60,7 @@
 | [`bench-suite.md`](bench-suite.md) | 回归基准：9 项检查（物理/检索/模型/索引），4 分钟验证 29 篇的结论 |
 | [`tool-calling.md`](tool-calling.md) | 工具调用：选择 98.3%、等价判据 96.7%；严格判据误杀 18 条（30pp） |
 | [`mini-agent.md`](mini-agent.md) | mini agent：工具让 20%→65%；失败在计划/接地，不在选工具 |
+| [`agent-guardrails.md`](agent-guardrails.md) | Agent 护栏：四道全部触发，准确率仍 65%——瓶颈是能力不是流程 |
 | [`lora-merging.md`](lora-merging.md) | LoRA 合并：同任务两适配器 60/52 → 混合严格插值，无协同 |
 | [`multimodal-rag.md`](multimodal-rag.md) | 以文搜图：原版 CLIP 中文 17%/英文 92%，Chinese-CLIP 75% |
 | [`hybrid-retrieval.md`](hybrid-retrieval.md) | bge-m3 + 重排：R@1 42%→75%、R@5 92%；BM25/RRF 零增益（伪需求） |

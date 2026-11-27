@@ -378,3 +378,4 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `agent_rescore.py` | 修正判据后重评（读已保存答案，不重跑） |
 | `merge_lora.py` | GRPO LoRA + RFT LoRA 线性插值（5 个 alpha） |
 | `mm_rag.py` | 以文搜图：24 张合成图，原版 CLIP vs Chinese-CLIP |
+| `mini_agent_guard.py` | 四道护栏（先读后答/路径白名单/单 JSON/读缓存）+ 触发计数 |
