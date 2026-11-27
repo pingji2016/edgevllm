@@ -394,3 +394,7 @@ CTX_LENS=2000,8000,16000 python routeB_kv.py
 | `anti_conformity.py` | 四组防从众干预（置信度/匿名/反方/抗误导） |
 | `sycophancy17.py` | 1.7B 的抗误导对照（采纳率 11%） |
 | `sycophancy_ctrl.py` | 三提示对照：plain / neutral_check / wrong_hint |
+
+| `split_merge3.py` | 分工拼图：9 段 × 6K，每段 1 事实（1/9 vs 9/9） |
+| `split_merge2.py` | 对照：每段 3 事实，观察张冠李戴 |
+| `mapreduce3.py` | 长文抽取实验（1.7B 在长上下文里失败，记录用） |

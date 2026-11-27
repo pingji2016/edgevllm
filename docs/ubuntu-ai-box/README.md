@@ -65,6 +65,7 @@
 | [`lora-merging-cross.md`](lora-merging-cross.md) | 跨能力合并：50/50 时新能力直接归零（悬崖），原生能力只是温和退化 |
 | [`multi-agent-debate.md`](multi-agent-debate.md) | 三个臭皮匠：3×0.6B 29-30% vs 1×1.7B 48%；MoA 反而把强者拉下水 |
 | [`anti-conformity.md`](anti-conformity.md) | 防从众：四种 prompt 干预全失效；0.6B 采纳错误建议 89.5%，1.7B 仅 11% 且准确率反升 |
+| [`split-merge-agents.md`](split-merge-agents.md) | 分工拼图：9 agent×6K 找回 9/9，单 agent 24K 只有 1/9；一片一事实 |
 | [`multimodal-rag.md`](multimodal-rag.md) | 以文搜图：原版 CLIP 中文 17%/英文 92%，Chinese-CLIP 75% |
 | [`hybrid-retrieval.md`](hybrid-retrieval.md) | bge-m3 + 重排：R@1 42%→75%、R@5 92%；BM25/RRF 零增益（伪需求） |
 
